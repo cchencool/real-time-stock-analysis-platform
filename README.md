@@ -1,5 +1,7 @@
 # real-time-stock-analysis-platform
 
+msbd5003 group project.
+
 ## Project Description
 
 In recent years, increasing numbers of projects in stock market are conducted by big data technology. With the complex features, large volume of data as well as the real-time ﬂuctuating price, and many other inﬂuential factors, in order to handle the task efﬁciently, big data technologies should be applied. Such platform can help organizationsandindividualstohavingabetterunderstandingofthe stock market and making correct decisions in different situations.
