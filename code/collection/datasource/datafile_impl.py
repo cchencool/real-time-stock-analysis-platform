@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from data_interface import DataInterface
-
-class DatafileImpl(DataInterface):
+class DatafileImpl(object):
 
     def __init__(self, *args, **kwargs):
-        return super().__init__(*args, **kwargs)
+        pass
 
     def get_data(self):
         print('from datafile impl')
