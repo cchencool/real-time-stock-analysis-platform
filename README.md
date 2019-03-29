@@ -1,6 +1,10 @@
 # real-time-stock-analysis-platform
 
 msbd5003 group project.
+#### Attention for submission
+
+* Please **DO NOT** submit large data file to ./data, although you can modify ./data/test_data.csv
+* Please **DO NOT** submit files in ./code/website/node_modules
 
 ## Project Description
 
@@ -29,13 +33,14 @@ We plan to do a wide project which aims to build a real-time stock clustering an
 | bin | startup scripts. |
 | code | project code |
 | docs | documentation |
-| data | data folder (Please **DON'T** upload large local data to git) |
+| data | data folder for collection module |
 | config | configuration files for runtime. |
 | install | installation scripts & relative configurations |
 
 ## System Architechure
 
 ![graph](docs/flow_graph.png)
+
 
 ## Reference
 
