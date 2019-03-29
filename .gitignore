@@ -3,6 +3,7 @@
 .log/
 .vscode
 node_modules/
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
