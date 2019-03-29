@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger(__name__)
 
 '''
-TODO: RESTful API Entry for data analysis platform
+TODO: RESTful API Entry for data visualization layer
 '''
 
 @app.route("/")
