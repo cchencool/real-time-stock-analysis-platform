@@ -18,7 +18,7 @@ class SparkResource(object):
         self.__spark_context : SparkContext= None
         self.__spark_stream_context : StreamingContext= None
 
-    def config(self, master='local[2]', app_name='StockAnalysis', **kwargs):
+    def config(self, master='local[2]', app_name='sparkResource', **kwargs):
         config = SparkConf()
         config.setMaster(master)
         config.setAppName(app_name)
@@ -33,13 +33,6 @@ class SparkResource(object):
         self.__spark_conf = config
         return self
 
-    def log_switch(self, on=False):
-        if self.__spark_context and on:
-            self.__spark_context.setLogLevel("INFO")
-        elif self.__spark_context and not on:
-            self.__spark_context.setLogLevel("OFF")
-        return self
-
     def build(self):
         ss = SparkSession.builder.config(conf=self.__spark_conf).getOrCreate()
         sc = ss.sparkContext
@@ -49,6 +42,12 @@ class SparkResource(object):
         self.__spark_stream_context = ssc
         return self
 
+    def log_switch(self, on=False):
+        if self.__spark_context and on:
+            self.__spark_context.setLogLevel("INFO")
+        elif self.__spark_context and not on:
+            self.__spark_context.setLogLevel("OFF")
+        return self
     # @property
     # def spark_conf(self):
     #     return self.__spark_conf

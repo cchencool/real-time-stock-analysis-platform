@@ -30,14 +30,21 @@ class BaseProcessor(SparkResource):
     """
     abstract class for processors
     """
-    def __init__(self, schema : StructType, master='local[2]', *args, **kwargs):
+    def __init__(self, schema : StructType, master='local[2]', app_name='baseProcessor', *args, **kwargs):
         # FIXME
         #  spark-session mng should not be here, but in OLTP or OLAP service.
         #  all processors should share the same spark-session & stream data.
         #  just using different process functions.
         super().__init__(*args, **kwargs)
         self.schema = schema
-        self.config(master=master).build()
+        self.ss = None
+        self.sc = None
+        self.master = master
+        self.app_name = app_name
+
+    def build(self, **kwargs):
+        self.config(master=self.master, app_name=self.app_name)
+        super().build()
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
 

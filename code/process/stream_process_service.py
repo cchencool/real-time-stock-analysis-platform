@@ -21,17 +21,10 @@ from pyspark.sql.functions import *
 from pojo.datavo import DataVO
 from utils.sparkresource import SparkResource
 from oltp_service import OLTPService
+from olap_service import OLAPService
 
-from processor.processors import StockAvgProcessor
+from processor.processors import StockAvgProcessor, BaseProcessor
 
-with open('../../config/config.json', 'r', encoding='utf-8') as f:
-    config = json.load(f)
-
-logging.basicConfig(level=logging.INFO,
-                    format='[%(asctime)s][%(name)s][%(threadName)s][%(levelname)s][%(message)s]',
-                    filename=pjoin(config['log_file_path'], 'log.log'))
-
-logger = logging.getLogger(__name__)
 
 # fh = logging.FileHandler()
 # fh.setLevel(logging.INFO)
@@ -42,34 +35,38 @@ class StreamProcessService():
     """
     should startup a single processor for each StreamingContext
     """
+    def __init__(self, master='local[2]'):
+        self.oltps = OLTPService(master=master)
+        self.olaps = OLAPService(master=master)
+        # self.dbp = DBStoreProcessor(schema=data_schema, master=master)
+        # self.mbs = ModelBuildingService(master=master)
+
+    def set_master(self, master):
+        self.master = master
+        self.oltps.master = master
+        self.olaps.master = master
+
+    def add_oltp(self, sps:BaseProcessor): #processor_name:str=""):
+        self.oltps.add_service(sps) #processor_name)
+
+    def add_olap(self, processor : BaseProcessor):
+        self.olaps.add_service(sps=processor)
+
     @staticmethod
-    def run(master = 'spark://localhost:7077'):
-        oltps = OLTPService(master=master)
-        threading.Thread(target=oltps.run, args=()).start()
+    def run(master='spark://localhost:7077'):
+        pass
+        # self.oltps.add_service(sap)
+        # self.oltps.add_service(dbp)
+        # self.oltps.add_service(mbs)
 
-        # olaps = OLAPService(master=master)
-        # threading.Thread(target=olaps.run, args=()).start()
-
-        while True:
-            # TODO should control the addition and deletion of
-            time.sleep(10)
-
-        # # create schema
-        # data_schema = DataVO.get_schema()
-        # sps  = StockAvgProcessor(schema=data_schema, master=master)
-        # ssc = sps.get_spark_stream_context(batchDuration=5)
-        # # Create a DStream that will connect to hostname:port, like localhost:9999
-        # dstream = ssc.socketTextStream("localhost", 5003)
-        # sps.handle_stream(dstream=dstream)
-
-        # # should run in parallel
-        # # sps_db = DBStoreProcessor(schema=data_schema, master=master)
-
-        # ssc.start()  # Start the computation
-        # ssc.awaitTermination()  # Wait for the computation to terminate
+        # while True:
+        #     # TODO should control the addition and deletion of
+        #     time.sleep(10)
 
 
-if __name__ == '__main__':
-    StreamProcessService.run()
-    # OLTPService.run()
+sps = StreamProcessService()
+
+# if __name__ == '__main__':
+#     StreamProcessService.run()
+#     # OLTPService.run()
 
