@@ -14,6 +14,7 @@ findspark.init()
 
 import json
 import logging
+from datetime import datetime as dt
 
 from pyspark.streaming import DStream
 
@@ -30,6 +31,10 @@ class BaseProcessor(SparkResource):
     abstract class for processors
     """
     def __init__(self, schema : StructType, master='local[2]', *args, **kwargs):
+        # FIXME
+        #  spark-session mng should not be here, but in OLTP or OLAP service.
+        #  all processors should share the same spark-session & stream data.
+        #  just using different process functions.
         super().__init__(*args, **kwargs)
         self.schema = schema
         self.config(master=master).build()
@@ -65,7 +70,10 @@ class BaseProcessor(SparkResource):
 
 
 class StockAvgProcessor(BaseProcessor):
-
+    """
+    sample process: get the mean price of stock with volume larger than 150.
+    you can call model_building_service here
+    """
     def format(self, dstream: DStream) -> DStream:
         """
         Transform the DStream to required structure.
@@ -77,15 +85,18 @@ class StockAvgProcessor(BaseProcessor):
         # lines.map(lambda line: line.split(',')).map(lambda rec: str(DataVO.ecapsulate(rec))).pprint()
         # ['-', '-', '-'] -> [ ['f', 'f', 'f'], ['f', 'f', 'f'],... ]
         field_lines = lines.map(lambda line: line.split(','))
+        # TODO re-implement cast_type function. do this based on self.schema object
         # cast string to column schema
-        field_lines_casted = field_lines.map(DataVO.cast_types)
+        def cast_types(line: list) -> list:
+            try:
+                l = [dt.strptime(line[0], '%Y-%m-%d %X'), float(line[1]), float(line[2]), float(line[3]), float(line[4]), line[5], line[6]]
+            except ValueError as e:
+                l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, '-1', '-1']
+            return l
+        field_lines_casted = field_lines.map(cast_types)
         return field_lines_casted
 
     def processor(self, time, rdd):
-        '''
-        sample process: get the mean price of stock with volume larger than 150.
-        you can call model_building_service here
-        '''
         df = rdd.toDF(schema=self.schema)
         print(f"{'-'*30}{time}{'-'*30}")
         # df.createOrReplaceTempView("stock")

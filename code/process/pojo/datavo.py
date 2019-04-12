@@ -20,7 +20,7 @@ class DataVO(object):
 
 
     @staticmethod
-    def create_schema() -> StructType:
+    def get_schema() -> StructType:
         """
         Get DataFrame schema
         :return: StructType
@@ -34,13 +34,13 @@ class DataVO(object):
         schema = StructType(sfields)
         return schema
 
-    @staticmethod
-    def cast_types(line: list) -> list:
-        try:
-            l = [dt.strptime(line[0], '%Y-%m-%d %X'), float(line[1]), float(line[2]), float(line[3]), float(line[4]), line[5], line[6]]
-        except ValueError as e:
-            l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, '-1', '-1']
-        return l
+    # @staticmethod
+    # def cast_types(line: list) -> list:
+    #     try:
+    #         l = [dt.strptime(line[0], '%Y-%m-%d %X'), float(line[1]), float(line[2]), float(line[3]), float(line[4]), line[5], line[6]]
+    #     except ValueError as e:
+    #         l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, '-1', '-1']
+    #     return l
 
 
     @staticmethod

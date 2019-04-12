@@ -20,6 +20,7 @@ TODO: produce stream data (could use kafka)
 bind_ip = '0.0.0.0'
 bind_port = 5003
 
+
 def startup():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((bind_ip, bind_port))
@@ -52,3 +53,5 @@ if __name__ == "__main__":
         client, addr = server.accept()
         logger.info("accept connection")
         threading.Thread(target=handle_client, args=(client, )).start()
+
+
