@@ -21,26 +21,49 @@ logging.basicConfig(level=logging.INFO,
 
 logger = logging.getLogger(__name__)
 
-SPARK_MASTER_URL = 'spark://localhost:7077'
-counter = 0
+# fh = logging.FileHandler()
+# fh.setLevel(logging.INFO)
+# logger.addHandler(fh)
 
 '''
 TODO: RESTful API Entry for data visualization layer
 '''
 
+
 @app.route("/")
 def hello():
     return "Hello, world!"
 
+
+# debug
 @app.route("/add_stock_avg_processor")
 def add_service():
-    global counter
-    counter += 1
-    sap = StockAvgProcessor(schema=DataVO.get_schema(), master=SPARK_MASTER_URL, app_name=f'sap_{counter}')
-    sps.add_oltp(sap)#processor_name="StockAvgProcessor")
-    return 'success'
+    pid = sps.add_oltp('processor.processors.StockAvgProcessor')
+    return f'success, pid = {pid}'
+
+
+@app.route("/add_processor")
+def add_oltp_service():
+    pname = request.values.get('pname')
+    pid = sps.add_oltp(pname)
+    return f'success, pid = {pid}'
+
+
+@app.route("/stop_oltp_processor")
+def stop_processor():
+    pid = request.values.get('pid')
+    result = sps.stop_oltp_processor(pid)
+    return f"pid: {pid}, status: {result}"
+
+
+@app.route("/get_curr_oltp_result")
+def get_curr_oltp_result():
+    pid = request.values.get('pid')
+    result = sps.get_oltp_curr_result(pid)
+    return f"{result}"
+
 
 if __name__ == "__main__":
+    SPARK_MASTER_URL = 'spark://localhost:7077'
     sps.set_master(SPARK_MASTER_URL)
-    app.run(debug=True)
-    # sps.run()
+    app.run(host='localhost', port=5000, debug=True)

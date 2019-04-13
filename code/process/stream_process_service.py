@@ -20,25 +20,27 @@ from pyspark.sql.functions import *
 
 from pojo.datavo import DataVO
 from utils.sparkresource import SparkResource
+from utils.processenum import ProcessCommand
 from oltp_service import OLTPService
 from olap_service import OLAPService
 
 from processor.processors import StockAvgProcessor, BaseProcessor
 
-
-# fh = logging.FileHandler()
-# fh.setLevel(logging.INFO)
-# logger.addHandler(fh)
+__all__ = ['sps']
 
 
 class StreamProcessService():
     """
-    should startup a single processor for each StreamingContext
+    This layer should determine whether reuse the already started processor OR start a new processor to handle the task.
     """
     def __init__(self, master='local[2]'):
-        self.oltps = OLTPService(master=master)
-        self.olaps = OLAPService(master=master)
+        self.processor_to_pid = dict()
+        self.pid_to_processor = dict()
+        self.oltps : OLTPService = OLTPService(master=master)
+        self.olaps_pid_dict = dict()
+        self.olaps : OLAPService = OLAPService(master=master)
         # self.dbp = DBStoreProcessor(schema=data_schema, master=master)
+        # self.add_oltp('processor.processors.DBStoreProcessor')
         # self.mbs = ModelBuildingService(master=master)
 
     def set_master(self, master):
@@ -46,27 +48,36 @@ class StreamProcessService():
         self.oltps.master = master
         self.olaps.master = master
 
-    def add_oltp(self, sps:BaseProcessor): #processor_name:str=""):
-        self.oltps.add_service(sps) #processor_name)
+    def add_oltp(self, processor_name):
+        # check processor/task cache to determine whether start a new one
+        if processor_name in self.processor_to_pid:
+            pid = self.processor_to_pid[processor_name]
+        else:
+            pid = self.oltps.add_service(processor_name=processor_name)
+            self.processor_to_pid[processor_name] = pid
+            self.pid_to_processor[pid] = processor_name
+        return pid
 
-    def add_olap(self, processor : BaseProcessor):
-        self.olaps.add_service(sps=processor)
+    def add_olap(self, processor_name):
+        if processor_name in self.processor_to_pid:
+            pid = self.processor_to_pid[processor_name]
+        else:
+            pid = self.olaps.add_service(processor_name=processor_name)
+            self.processor_to_pid[processor_name] = pid
+            self.pid_to_processor[pid] = processor_name
+        return pid
 
-    @staticmethod
-    def run(master='spark://localhost:7077'):
-        pass
-        # self.oltps.add_service(sap)
-        # self.oltps.add_service(dbp)
-        # self.oltps.add_service(mbs)
+    def stop_oltp_processor(self, pid):
+        pid = int(pid)
+        result = self.oltps.terminate_process(pid)
+        self.processor_to_pid.pop(self.pid_to_processor.pop(pid))
+        return f"{result}"
 
-        # while True:
-        #     # TODO should control the addition and deletion of
-        #     time.sleep(10)
+    def get_oltp_curr_result(self, pid):
+        pid = int(pid)
+        result = self.oltps.communicate(pid=pid, cmd=ProcessCommand.GET_CURR_RESULT)
+        return f"{result}"
 
 
+# singleton
 sps = StreamProcessService()
-
-# if __name__ == '__main__':
-#     StreamProcessService.run()
-#     # OLTPService.run()
-

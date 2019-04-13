@@ -23,24 +23,34 @@ from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
 from pojo.datavo import DataVO
+from utils.processenum import ProcessStatus
 from utils.sparkresource import SparkResource
 
+__all__ = ['BaseProcessor', 'StockAvgProcessor']
+
+class ProcessorResult(object):
+
+    def __init__(self):
+        self.result_str = ''
+        self.result_list = []
+        self.result_dict = []
+
+    pass
 
 class BaseProcessor(SparkResource):
     """
-    abstract class for processors
+    abstract class for processors.
+    Some processor can implement as stateful computation
+    Should be applied in single process, because the only one spark-session can running in one JVM
     """
-    def __init__(self, schema : StructType, master='local[2]', app_name='baseProcessor', *args, **kwargs):
-        # FIXME
-        #  spark-session mng should not be here, but in OLTP or OLAP service.
-        #  all processors should share the same spark-session & stream data.
-        #  just using different process functions.
-        super().__init__(*args, **kwargs)
+    def __init__(self, schema:StructType, master='local[2]', app_name='baseProcessor'):
+        super().__init__()
         self.schema = schema
         self.ss = None
         self.sc = None
         self.master = master
         self.app_name = app_name
+        self.run_result = ProcessorResult()
 
     def build(self, **kwargs):
         self.config(master=self.master, app_name=self.app_name)
@@ -57,6 +67,7 @@ class BaseProcessor(SparkResource):
         dstream = self.format(dstream=dstream)
         # process rdds of each batch
         dstream.foreachRDD(self.processor)
+        dstream.foreachRDD(self.done)
 
     def format(self, dstream: DStream) -> DStream:
         """
@@ -69,6 +80,15 @@ class BaseProcessor(SparkResource):
     def processor(self, time, rdd):
         """
         process program foreach rdd in DStream object
+        :param time:
+        :param rdd:
+        :return:
+        """
+        raise NotImplementedError
+
+    def done(self, time, rdd):
+        """
+        processing finish callback. To fill up results
         :param time:
         :param rdd:
         :return:
@@ -116,3 +136,8 @@ class StockAvgProcessor(BaseProcessor):
             .mean('price')\
             .withColumnRenamed('avg(price)', 'mean_price')
         result.show()
+        # self.run_result.append(result.)
+
+    def done(self, time, rdd):
+        self.run_result.result_str = time
+
