@@ -25,7 +25,7 @@ Process.daemon = True
 
 class OLAPService(object):
 
-    def __init__(self, master='local[2]', stream_port=5003, *args, **kwargs):
+    def __init__(self):#, master='local[2]', stream_port=5003, *args, **kwargs):
         pass
 
     def add_service(self, processor_name:str):

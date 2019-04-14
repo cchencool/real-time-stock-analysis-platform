@@ -27,11 +27,18 @@ class OLTPService(object):
     This service should in charge of:
     1. manage the startup or shutdown of stream processor functions
     """
-    def __init__(self, master='local[2]', stream_port=5003, *args, **kwargs):
+    def __init__(self):#, master='local[2]', stream_port=5003, *args, **kwargs):
         # super().__init__(*args, **kwargs)
-        self.master = master
-        self.stream_port = stream_port
+        # self.master = master
+        # self.stream_port = stream_port
+        self.set_stream_port()
         self.process_dict = dict()
+
+    def set_master(self, master):
+        self.master = master
+
+    def set_stream_port(self, port=5003):
+        self.stream_port = port
 
     def add_service(self, processor_name:str):
         global counter
@@ -117,3 +124,5 @@ class OLTPProcess(Process):
     def terminate(self):
         super().terminate()
 
+
+oltps = OLTPService()

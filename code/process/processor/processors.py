@@ -28,6 +28,7 @@ from utils.sparkresource import SparkResource
 
 __all__ = ['BaseProcessor', 'StockAvgProcessor']
 
+
 class ProcessorResult(object):
 
     def __init__(self):
@@ -35,7 +36,6 @@ class ProcessorResult(object):
         self.result_list = []
         self.result_dict = []
 
-    pass
 
 class BaseProcessor(SparkResource):
     """
@@ -53,7 +53,12 @@ class BaseProcessor(SparkResource):
         self.run_result = ProcessorResult()
 
     def build(self, **kwargs):
-        self.config(master=self.master, app_name=self.app_name)
+        """
+        for extra spark config, re-implement this, should call self.config before self.build()
+        :param kwargs:
+        :return:
+        """
+        self.base_config(master=self.master, app_name=self.app_name)
         super().build()
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
@@ -67,40 +72,8 @@ class BaseProcessor(SparkResource):
         dstream = self.format(dstream=dstream)
         # process rdds of each batch
         dstream.foreachRDD(self.processor)
-        dstream.foreachRDD(self.done)
+        # dstream.foreachRDD(self.done)
 
-    def format(self, dstream: DStream) -> DStream:
-        """
-        Transform the DStream to required structure.
-        :param dstream: input dstream
-        :return: transformed dstream
-        """
-        raise NotImplementedError
-
-    def processor(self, time, rdd):
-        """
-        process program foreach rdd in DStream object
-        :param time:
-        :param rdd:
-        :return:
-        """
-        raise NotImplementedError
-
-    def done(self, time, rdd):
-        """
-        processing finish callback. To fill up results
-        :param time:
-        :param rdd:
-        :return:
-        """
-        raise NotImplementedError
-
-
-class StockAvgProcessor(BaseProcessor):
-    """
-    sample process: get the mean price of stock with volume larger than 150.
-    you can call model_building_service here
-    """
     def format(self, dstream: DStream) -> DStream:
         """
         Transform the DStream to required structure.
@@ -124,6 +97,28 @@ class StockAvgProcessor(BaseProcessor):
         return field_lines_casted
 
     def processor(self, time, rdd):
+        """
+        process program foreach rdd in DStream object.
+        This part should also handle the run_result object if necessary.
+        :param time:
+        :param rdd:
+        :return:
+        """
+        raise NotImplementedError
+
+
+class StockAvgProcessor(BaseProcessor):
+    """
+    sample process: get the mean price of stock with volume larger than 150.
+    you can call model_building_service here
+    """
+    # def format(self, dstream: DStream) -> DStream:
+
+    def build(self, **kwargs):
+        self.config(spark_cores_max = '2');
+        super().build()
+
+    def processor(self, time, rdd):
         df = rdd.toDF(schema=self.schema)
         print(f"{'-'*30}{time}{'-'*30}")
         # df.createOrReplaceTempView("stock")
@@ -131,13 +126,13 @@ class StockAvgProcessor(BaseProcessor):
         #             'from stock t '
         #             'where t.volume > 150 '
         #             'group by t.stock_code').show()
-        result = df.filter('volume > 150')\
-            .groupby('stock_code')\
-            .mean('price')\
+        result = df.filter('volume > 150') \
+            .groupby('stock_code') \
+            .mean('price') \
             .withColumnRenamed('avg(price)', 'mean_price')
         result.show()
-        # self.run_result.append(result.)
-
-    def done(self, time, rdd):
         self.run_result.result_str = time
+
+    # def done(self, time, rdd):
+    #     pass
 

@@ -36,16 +36,16 @@ class StreamProcessService():
     def __init__(self, master='local[2]'):
         self.processor_to_pid = dict()
         self.pid_to_processor = dict()
-        self.oltps : OLTPService = OLTPService(master=master)
+        self.oltps : OLTPService = OLTPService()#master=master)
         self.olaps_pid_dict = dict()
-        self.olaps : OLAPService = OLAPService(master=master)
+        self.olaps : OLAPService = OLAPService()#master=master)
         # self.dbp = DBStoreProcessor(schema=data_schema, master=master)
         # self.add_oltp('processor.processors.DBStoreProcessor')
         # self.mbs = ModelBuildingService(master=master)
 
     def set_master(self, master):
         self.master = master
-        self.oltps.master = master
+        self.oltps.set_master(master)
         self.olaps.master = master
 
     def add_oltp(self, processor_name):
