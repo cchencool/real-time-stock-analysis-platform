@@ -13,7 +13,7 @@ from pyspark.sql.functions import *
 from pojo.datavo import DataVO
 from utils.sparkresource import SparkResource
 from utils.processenum import ProcessStatus, ProcessCommand
-from utils.moduletools import reflect_inst
+from utils.moduletools import reflect_inst, castparam
 from processor.processors import StockAvgProcessor, BaseProcessor, ProcessorResult
 
 from multiprocessing import Process, Pipe
@@ -21,18 +21,21 @@ from multiprocessing import Process, Pipe
 counter = 0
 Process.daemon = True
 
+__all__ = ['oltps']
+
 
 class OLTPService(object):
     """
     This service should in charge of:
     1. manage the startup or shutdown of stream processor functions
     """
-    def __init__(self):#, master='local[2]', stream_port=5003, *args, **kwargs):
+    def __init__(self, master='local[2]', stream_port=5003, *args, **kwargs):
         # super().__init__(*args, **kwargs)
-        # self.master = master
-        # self.stream_port = stream_port
-        self.set_stream_port()
+        self.set_master(master=master)
+        self.set_stream_port(port=stream_port)
         self.process_dict = dict()
+        self.processor_to_pid = dict()
+        self.pid_to_processor = dict()
 
     def set_master(self, master):
         self.master = master
@@ -46,14 +49,20 @@ class OLTPService(object):
         #  1. Add process management. process pool
         parent_conn, child_conn = Pipe()
         counter += 1
-        # sap : BaseProcessor = reflect_inst(processor_name, schema=DataVO.get_schema(), master=self.master, app_name=f'sap_{counter}')
-        # p = OLTPProcess(sap, child_conn, stream_port=self.stream_port)
-        p = OLTPProcess(processor_name, child_conn, master=self.master, stream_port=self.stream_port)
-        p.start()
-        self.process_dict[p.pid] = (p, parent_conn)
-        return p.pid
+        # check processor/task cache to determine whether start a new one
+        if processor_name in self.processor_to_pid:
+            pid = self.processor_to_pid[processor_name]
+        else:
+            p = OLTPProcess(processor_name, child_conn, master=self.master, stream_port=self.stream_port)
+            p.start()
+            pid = p.pid
+            self.process_dict[p] = (p, parent_conn)
+            self.processor_to_pid[processor_name] = pid
+            self.pid_to_processor[pid] = processor_name
+        return pid
+        # return p.pid
 
-
+    @castparam({'pid':int})
     def terminate_process(self, pid):
         if pid in self.process_dict:
             p, conn = self.process_dict[pid]
@@ -61,6 +70,7 @@ class OLTPService(object):
             p.terminate()
             return ""
 
+    @castparam({'pid':int})
     def communicate(self, pid, cmd):
         if pid in self.process_dict:
             p, conn = self.process_dict[pid]
@@ -125,4 +135,5 @@ class OLTPProcess(Process):
         super().terminate()
 
 
+# singleton
 oltps = OLTPService()

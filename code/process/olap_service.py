@@ -47,7 +47,16 @@ class OLAPProcess(Process):
         pass
 
     def run(self):
+        """
+        TODO
+         1. database query to get dataframe
+         2. passing dataframe to modelingProcessor.process
+         3. get model &/or inference result
+        :return:
+        """
         pass
 
     def terminate(self):
         super().terminate()
+
+olaps = OLAPService()

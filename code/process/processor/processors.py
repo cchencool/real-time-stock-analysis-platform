@@ -18,15 +18,16 @@ from datetime import datetime as dt
 
 from pyspark.streaming import DStream
 
-from pyspark.sql import SparkSession
+from pyspark import rdd as t_rdd
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
-from pojo.datavo import DataVO
-from utils.processenum import ProcessStatus
 from utils.sparkresource import SparkResource
 
-__all__ = ['BaseProcessor', 'StockAvgProcessor']
+__all__ = ['BaseProcessor', 'ProcessorResult',
+           'ModelingProcessor', 'StreamModelProcessor', 'BatchModelProcessor',
+           'StockAvgProcessor']
 
 
 class ProcessorResult(object):
@@ -35,6 +36,7 @@ class ProcessorResult(object):
         self.result_str = ''
         self.result_list = []
         self.result_dict = []
+        self.inference_result = None
 
 
 class BaseProcessor(SparkResource):
@@ -71,7 +73,8 @@ class BaseProcessor(SparkResource):
         """
         dstream = self.format(dstream=dstream)
         # process rdds of each batch
-        dstream.foreachRDD(self.processor)
+        run_result = dstream.foreachRDD(self.processor)
+        self.run_result = run_result
         # dstream.foreachRDD(self.done)
 
     def format(self, dstream: DStream) -> DStream:
@@ -96,7 +99,7 @@ class BaseProcessor(SparkResource):
         field_lines_casted = field_lines.map(cast_types)
         return field_lines_casted
 
-    def processor(self, time, rdd):
+    def processor(self, time, rdd: t_rdd) -> ProcessorResult:
         """
         process program foreach rdd in DStream object.
         This part should also handle the run_result object if necessary.
@@ -107,6 +110,82 @@ class BaseProcessor(SparkResource):
         raise NotImplementedError
 
 
+class ModelingProcessor(BaseProcessor):
+
+    def __init__(self, schema:StructType, mdls=None, algo=None, master='local[2]', app_name='baseProcessor'):
+        """
+        Base class for modeling processors
+        :param schema: data schema
+        :param mdls: modeling service, mdls & algo should both be None or not.
+        :param algo: model algorithm
+        :param master: spark master host
+        :param app_name: app name
+        """
+        super().__init__(self, schema=schema, master=master, app_name=app_name)
+        self.algo = algo
+        self.mdls = mdls
+        self.model = None
+
+    def processor(self, time, rdd:t_rdd=None, df:DataFrame=None) -> ProcessorResult:
+        """
+        oltp will pass rdd; olap will pass dataFrame by the framework
+        :param time:
+        :param rdd:
+        :param df:
+        :return:
+        """
+        if not df and rdd:
+            df = rdd.toDF(schema=self.schema)
+        # if self.mdls:
+        #     self.model = self.mdls.modeling(df, algo=self.algo)
+        #     result = self.mdls.inference(model=self.model, data=df, is_saving=False, saving_path=None)
+        # else:
+        self.model = self.modeling(df=df)
+        result = self.inference(df=df)
+        self.run_result = self.encapsulate_inference_result(result)
+
+    def modeling(self, df):
+        """
+        if modeling service is not passed when init. using self-defined modeling func
+        should include special feature engineering if needed
+        :param df: the data is for both modeling and inference. (regression / clustering) for next n period
+        :return:
+        """
+        raise NotImplementedError
+
+    def inference(self, df):
+        """
+        if modeling service is not passed when init. using self-defined inference func
+        :param df:
+        :return:
+        """
+        raise NotImplementedError
+
+    def encapsulate_inference_result(self, inference_result) -> ProcessorResult:
+        """
+        encapsulate inference result object returned by spark to system recognized format.
+        :param inference_result:
+        :return:
+        """
+        raise NotImplementedError
+
+
+class StreamModelProcessor(ModelingProcessor):
+
+    def processor(self, time, rdd:t_rdd) -> ProcessorResult:
+        return super().processor(time=time, rdd=rdd)
+
+
+class BatchModelProcessor(ModelingProcessor):
+
+   def processor(self, time, df:DataFrame) -> ProcessorResult:
+       return super().processor(time=time, df=df)
+
+
+############################### classes above are all base class ####################################
+
+
+# demo
 class StockAvgProcessor(BaseProcessor):
     """
     sample process: get the mean price of stock with volume larger than 150.
@@ -118,7 +197,7 @@ class StockAvgProcessor(BaseProcessor):
         self.config(spark_cores_max = '2');
         super().build()
 
-    def processor(self, time, rdd):
+    def processor(self, time, rdd:t_rdd):
         df = rdd.toDF(schema=self.schema)
         print(f"{'-'*30}{time}{'-'*30}")
         # df.createOrReplaceTempView("stock")
@@ -132,7 +211,6 @@ class StockAvgProcessor(BaseProcessor):
             .withColumnRenamed('avg(price)', 'mean_price')
         result.show()
         self.run_result.result_str = time
+        return self.run_result
 
-    # def done(self, time, rdd):
-    #     pass
 

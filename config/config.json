@@ -1,3 +1,12 @@
 {
-  "log_file_path": "/Users/Chen/Library/Mobile Documents/com~apple~CloudDocs/HKUST/MSBD5003_BDC/msbd5003_project"
+  "MSBD5003_PRJ_LOG_PATH": "",
+  "SPARK_MASTER_HOST": "",
+  "pname_dict": {
+    "demo": "processor.processors.StockAvgProcessor",
+    "dbstore": "processor.processors.DBStoreProcessor",
+    "stream.regression.linear": "processor.stream.StreamLinearRegressionProcessor",
+    "stream.cluster.kmeans": "processor.stream.StreamKMeansProcessor",
+    "batch.regression.linear": "processor.batch.LinearProcessor",
+    "batch.cluster.kmeans": "processor.batch.KMeansProcessor"
+  }
 }
