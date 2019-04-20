@@ -56,20 +56,9 @@ class TaskManger(object):
         counter_locker.acquire()
         counter += 1
         counter_locker.release()
-        pid = None
         data = None
         # check processor/task cache to determine whether start a new one
-        if classname in self.processor_to_pid:
-            cache_locker.acquire()
-            pid = self.processor_to_pid[classname]
-            p, conn = self.process_dict[pid]
-            cache_locker.release()
-            p:Process
-            if p.is_alive():
-                logging.info(f"find cache process for {classname}, pid: {pid}")
-            else:
-                self.terminate_process(pid)
-                pid = None
+        pid = self._check_processor_pid(processor=classname)
         # no cache, or process is already dead.
         if pid is None:
             from .oltp_service import OLTPProcess
@@ -108,6 +97,27 @@ class TaskManger(object):
                     data = p.sps.run_result
         return pid, data
 
+
+    def _check_processor_pid(self, pid=None, processor=None):
+        p = None
+        cache_locker.acquire()
+        if pid is not None and pid in self.process_dict:
+            p, conn = self.process_dict[pid]
+            processor = self.pid_to_processor[pid]
+        elif processor is not None and processor in self.processor_to_pid:
+            pid = self.processor_to_pid[processor]
+            p, conn = self.process_dict[pid]
+        cache_locker.release()
+        if p is not None:
+            p: Process
+            if p.is_alive():
+                logging.info(f"find cache process for {processor}, pid: {pid}")
+            else:
+                logging.info(f"find dead process for {processor}, pid: {pid}")
+                self.terminate_process(pid)
+        return pid
+
+
     @castparam({'pid':int})
     def terminate_process(self, pid):
         result = "pid not found"
@@ -130,6 +140,7 @@ class TaskManger(object):
     def communicate(self, pid, cmd):
         status = None
         result = None
+        self._check_processor_pid(pid=pid)
         cache_locker.acquire()
         if pid in self.process_dict:
             p, conn = self.process_dict[pid]

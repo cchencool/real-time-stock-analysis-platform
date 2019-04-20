@@ -28,7 +28,7 @@ from database.dbaccess import DataAccess
 
 __all__ = ['BaseProcessor', 'ProcessorResult',
            'ModelingProcessor', 'StreamModelProcessor', 'BatchModelProcessor',
-           'StockAvgProcessor', 'DBStoreProcessor']
+           'StockAvgProcessor', 'ModelInferenceProcessor', 'DBStoreProcessor']
 
 
 class ProcessorResult(object):
@@ -36,7 +36,7 @@ class ProcessorResult(object):
     def __init__(self):
         self.result_str = ''
         self.result_list = []
-        self.result_dict = []
+        self.result_dict = {}
         self.inference_result = None
 
 
@@ -69,22 +69,26 @@ class BaseProcessor(SparkResource):
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
 
-    def handle_stream(self, dstream: DStream):
+    def transform(self, data):
+        """
+        transform before handle
+        :param data:
+        :return:
+        """
+        raise NotImplementedError
+
+    def handle(self, data):
         """
         Stream Handler
-        :param dstream: input dstream
+        :param data: input dstream
         :return: None
         """
-        try:
-            dstream = self.format(dstream=dstream)
-            # process rdds of each batch
-            dstream.foreachRDD(self.processor)
-        except Exception as e:
-            logging.error(e)
-            print(e)
-            return
+        raise NotImplementedError
 
-    def format(self, dstream: DStream) -> DStream:
+
+class StreamingProcessor(BaseProcessor):
+
+    def transform(self, dstream: DStream) -> DStream:
         """
         Transform the DStream to required structure.
         :param dstream: input dstream
@@ -106,6 +110,21 @@ class BaseProcessor(SparkResource):
         field_lines_casted = field_lines.map(cast_types)
         return field_lines_casted
 
+    def handle(self, data: DStream):
+        """
+        Stream Handler
+        :param data: input dstream
+        :return: None
+        """
+        try:
+            data = self.transform(dstream=data)
+            # process rdds of each batch
+            data.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
+
     def processor(self, time, rdd: t_rdd) -> ProcessorResult:
         """
         process program foreach rdd in DStream object.
@@ -119,54 +138,44 @@ class BaseProcessor(SparkResource):
 
 class ModelingProcessor(BaseProcessor):
 
-    def __init__(self, schema:StructType, mdls=None, algo=None, master='local[2]', app_name='baseProcessor'):
+    def __init__(self, schema:StructType, algo=None, master='local[2]', app_name='baseProcessor'):
         """
         Base class for modeling processors
         :param schema: data schema
-        :param mdls: modeling service, mdls & algo should both be None or not.
         :param algo: model algorithm
         :param master: spark master host
         :param app_name: app name
         """
         super().__init__(self, schema=schema, master=master, app_name=app_name)
         self.algo = algo
-        self.mdls = mdls
         self.model = None
 
-    def processor(self, time, rdd:t_rdd=None, df:DataFrame=None) -> ProcessorResult:
-        """
-        oltp will pass rdd; olap will pass dataFrame by the framework
-        :param time:
-        :param rdd:
-        :param df:
-        :return:
-        """
-        if not df and rdd:
-            df = rdd.toDF(schema=self.schema)
-        self.model = self.modeling(df=df)
-        result = self.inference(df=df)
+    def handle(self, data):
+        data = self.transform(data=data)
+        self.model = self.modeling(data=data)
+        result = self.inference(data=data)
         self.run_result = self.encapsulate_inference_result(result)
 
-    def modeling(self, df):
+    def modeling(self, data):
         """
         if modeling service is not passed when init. using self-defined modeling func
         should include special feature engineering if needed
-        :param df: the data is for both modeling and inference. (regression / clustering) for next n period
+        :param dstream: the data is for both modeling and inference. (regression / clustering) for next n period
         :return:
         """
         raise NotImplementedError
 
-    def inference(self, df):
+    def inference(self, data):
         """
         if modeling service is not passed when init. using self-defined inference func
-        :param df:
+        :param dstream:
         :return:
         """
         raise NotImplementedError
 
     def encapsulate_inference_result(self, inference_result) -> ProcessorResult:
         """
-        encapsulate inference result object returned by spark to system recognized format.
+        encapsulate inference result object returned by spark to system recognized transform.
         :param inference_result:
         :return:
         """
@@ -175,26 +184,38 @@ class ModelingProcessor(BaseProcessor):
 
 class StreamModelProcessor(ModelingProcessor):
 
-    def processor(self, time, rdd:t_rdd) -> ProcessorResult:
-        return super().processor(time=time, rdd=rdd)
+    def transform(self, data: DStream) -> DStream:
+        raise NotImplementedError
+
+    def modeling(self, data: DStream) -> DStream:
+        raise NotImplementedError
+
+    def inference(self, data: DStream) -> DStream:
+        raise NotImplementedError
 
 
 class BatchModelProcessor(ModelingProcessor):
 
-   def processor(self, time, df:DataFrame) -> ProcessorResult:
-       return super().processor(time=time, df=df)
+    def transform(self, data: DataFrame) -> DataFrame:
+        raise NotImplementedError
+
+    def modeling(self, data: DataFrame) -> DataFrame:
+        raise NotImplementedError
+
+    def inference(self, data: DataFrame) -> DStream:
+        raise NotImplementedError
 
 
 ############################### classes above are all base class ####################################
 
 
 # demo
-class StockAvgProcessor(BaseProcessor):
+class StockAvgProcessor(StreamingProcessor):
     """
     sample process: get the mean price of stock with volume larger than 150.
     you can call model_building_service here
     """
-    # def format(self, dstream: DStream) -> DStream:
+    # def transform(self, dstream: DStream) -> DStream:
     def build_context(self, **kwargs):
         self.config(spark_cores_max = '2');
         super().build_context()
@@ -224,13 +245,23 @@ class StockAvgProcessor(BaseProcessor):
 
 
 '''
+Author: cchen
+'''
+class ModelInferenceProcessor(StreamModelProcessor):
+    """
+    TODO using batch model to do inference on the stream data
+    """
+    pass
+
+
+'''
 Author: Dojo
 '''
-class DBStoreProcessor(BaseProcessor):
+class DBStoreProcessor(StreamingProcessor):
     """
     Connect to the MongoDB
     """
-    # def format(self, dstream: DStream) -> DStream:
+    # def transform(self, dstream: DStream) -> DStream:
     def build_context(self, **kwargs):
         self.config(spark_mongodb_input_uri="mongodb://127.0.0.1/5003.stocks",
                     spark_mongodb_output_uri="mongodb://127.0.0.1/5003.stocks",
@@ -251,13 +282,13 @@ class DBStoreProcessor(BaseProcessor):
         # print(df)
         #
         # # Run SQL
-        # sql = 'select * from {} where type > 0'.format(coll)
+        # sql = 'select * from {} where type > 0'.transform(coll)
         # sparkDF_sql = dao.run_sql(sql, db, coll)
         # df_sql = sparkDF_sql.collect()
         # print(df_sql)
 
 
-if __name__ == '__main__':
-    dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
-    dbsp.build()
-    dbsp.processor(time='', rdd='')
+# if __name__ == '__main__':
+#     dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
+#     dbsp.build()
+#     dbsp.processor(time='', rdd='')

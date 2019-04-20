@@ -58,7 +58,7 @@ class OLTPProcess(BaseTaskProcess):
             dstream = ssc.socketTextStream("localhost", self.stream_port)
 
             # handle stream data
-            self.sps.handle_stream(dstream=dstream)
+            self.sps.handle(data=dstream)
 
             # Start the computation
             ssc.start()

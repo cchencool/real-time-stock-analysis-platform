@@ -6,18 +6,25 @@
 # @Site    : 
 # @File    : clustering.py
 # @Software: PyCharm
+from pyspark.sql import DataFrame
+from pyspark.streaming import DStream
 
 __author__ = "chen"
 
 from processor.processors import BatchModelProcessor, ProcessorResult
 
+__all__ = ["KMeansProcessor"]
+
 
 class KMeansProcessor(BatchModelProcessor):
 
-    def modeling(self, df):
+    def transform(self, data: DataFrame) -> DataFrame:
         pass
 
-    def inference(self, df):
+    def modeling(self, data: DataFrame) -> DataFrame:
+        pass
+
+    def inference(self, data: DataFrame) -> DStream:
         pass
 
     def encapsulate_inference_result(self, inference_result) -> ProcessorResult:

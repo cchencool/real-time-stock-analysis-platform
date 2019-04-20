@@ -6,19 +6,25 @@
 # @Site    : 
 # @File    : clustering.py
 # @Software: PyCharm
+from pyspark.streaming import DStream
 
 __author__ = "chen"
 
 from processor.processors import StreamModelProcessor, ProcessorResult
 
+__all__ = ["StreamKMeansProcessor"]
+
 
 class StreamKMeansProcessor(StreamModelProcessor):
-    def modeling(self, df):
+
+    def transform(self, data: DStream) -> DStream:
         pass
 
-    def inference(self, df):
+    def modeling(self, data: DStream) -> DStream:
+        pass
+
+    def inference(self, data: DStream) -> DStream:
         pass
 
     def encapsulate_inference_result(self, inference_result) -> ProcessorResult:
         pass
-

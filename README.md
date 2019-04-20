@@ -49,6 +49,12 @@ We plan to do a wide project which aims to build_context a real-time stock clust
 
 ![graph](docs/flow_graph.png)
 
+## Test requests
+http://localhost:5000/demo
+http://localhost:5000/stop_oltp_processor?pid=
+http://localhost:5000/get_curr_oltp_result?pid=
+
+
 
 ## Reference
 

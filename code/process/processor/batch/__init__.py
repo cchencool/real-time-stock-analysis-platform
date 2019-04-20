@@ -8,3 +8,6 @@
 # @Software: PyCharm
 
 __author__ = "chen"
+
+from .clustering import *
+from .regression import *

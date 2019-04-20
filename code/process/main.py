@@ -11,7 +11,6 @@ from utils.processenum import ProcessCommand
 from service.manger import service_manger
 import threading
 
-
 app = Flask(__name__)
 sem = threading.Semaphore()
 
@@ -38,9 +37,7 @@ RequestHandler
 def hello():
     return "Hello, world!"
 
-
-
-# debug
+# =============== debug start =================
 @app.route("/mongodb")
 def add_mongodb():
     pdemo = 'dbstore'
@@ -48,12 +45,14 @@ def add_mongodb():
     pid, data = service_manger.add_task(**pparam)
     return f'success, pid = {pid}'
 
+
 @app.route("/demo")
 def add_demo_task():
     pdemo = 'demo'
     pparam = aquire_pparam(pdemo)
     pid, data = service_manger.add_task(**pparam)
     return f'success, pid = {pid}'
+# =============== debug end ====================
 
 
 @app.route("/add_task")
@@ -70,7 +69,6 @@ def add_task():
 
 @app.route("/stop_oltp_processor")
 def stop_processor():
-    # pid = int(request.values.get('pid'))
     pid = request.values.get('pid')
     result = service_manger.terminate_process(pid=pid)
     return f"pid: {pid}, status: {result}"
@@ -78,7 +76,6 @@ def stop_processor():
 
 @app.route("/get_curr_oltp_result")
 def get_curr_oltp_result():
-    # pid = int(request.values.get('pid'))
     pid = request.values.get('pid')
     result = service_manger.communicate(pid=pid, cmd=ProcessCommand.GET_CURR_RESULT)
     return f"{result}"
@@ -91,6 +88,7 @@ def reload_cfg():
     with open('../../config/config.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
     sem.release()
+
 
 def init_server(spark_master_host ='spark://localhost:7077'):
     global config
