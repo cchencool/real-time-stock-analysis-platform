@@ -36,12 +36,12 @@ def castparam(cast_dict:dict=dict()):
         return wrapper
     return decorator
 
-
-
-if __name__ == '__main__':
-    @castparam({'pid':int, 's':str})
-    def test(pid:int, s:str):
-        print(f"pid type: {type(pid)}")
-        print(f"s type: {type(s)}")
-
-    test(pid="655", s=321)
+#
+#
+# if __name__ == '__main__':
+#     @castparam({'pid':int, 's':str})
+#     def test(pid:int, s:str):
+#         print(f"pid type: {type(pid)}")
+#         print(f"s type: {type(s)}")
+#
+#     test(pid="655", s=321)

@@ -1,4 +1,7 @@
 
+
+debug.log
+derby.log
 .DS_Store
 metastore_db
 .idea

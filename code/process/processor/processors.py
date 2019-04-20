@@ -53,15 +53,18 @@ class BaseProcessor(SparkResource):
         self.master = master
         self.app_name = app_name
         self.run_result = ProcessorResult()
+        self.socket_host = None
+        self.socket_port = None
+        self.ssc_batchDuration = None
 
-    def build(self, **kwargs):
+    def build_context(self, **kwargs):
         """
-        for extra spark config, re-implement this, should call self.config before self.build()
+        for extra spark config, re-implement this, should call self.config before self.build_context()
         :param kwargs:
         :return:
         """
         self.base_config(master=self.master, app_name=self.app_name)
-        super().build()
+        super().build_context()
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
 
@@ -71,11 +74,14 @@ class BaseProcessor(SparkResource):
         :param dstream: input dstream
         :return: None
         """
-        dstream = self.format(dstream=dstream)
-        # process rdds of each batch
-        run_result = dstream.foreachRDD(self.processor)
-        self.run_result = run_result
-        # dstream.foreachRDD(self.done)
+        try:
+            dstream = self.format(dstream=dstream)
+            # process rdds of each batch
+            dstream.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
 
     def format(self, dstream: DStream) -> DStream:
         """
@@ -136,10 +142,6 @@ class ModelingProcessor(BaseProcessor):
         """
         if not df and rdd:
             df = rdd.toDF(schema=self.schema)
-        # if self.mdls:
-        #     self.model = self.mdls.modeling(df, algo=self.algo)
-        #     result = self.mdls.inference(model=self.model, data=df, is_saving=False, saving_path=None)
-        # else:
         self.model = self.modeling(df=df)
         result = self.inference(df=df)
         self.run_result = self.encapsulate_inference_result(result)
@@ -192,25 +194,30 @@ class StockAvgProcessor(BaseProcessor):
     you can call model_building_service here
     """
     # def format(self, dstream: DStream) -> DStream:
-
-    def build(self, **kwargs):
+    def build_context(self, **kwargs):
         self.config(spark_cores_max = '2');
-        super().build()
+        super().build_context()
 
     def processor(self, time, rdd:t_rdd):
-        df = rdd.toDF(schema=self.schema)
-        print(f"{'-'*30}{time}{'-'*30}")
-        # df.createOrReplaceTempView("stock")
-        # self.ss.sql('select t.stock_code, mean(t.price) as mean_price '
-        #             'from stock t '
-        #             'where t.volume > 150 '
-        #             'group by t.stock_code').show()
-        result = df.filter('volume > 150') \
-            .groupby('stock_code') \
-            .mean('price') \
-            .withColumnRenamed('avg(price)', 'mean_price')
-        result.show()
-        self.run_result.result_str = time
-        return self.run_result
-
+        try :
+            df = rdd.toDF(schema=self.schema)
+            print(f"{'-'*30}{time}{'-'*30}")
+            # df.createOrReplaceTempView("stock")
+            # self.ss.sql('select t.stock_code, mean(t.price) as mean_price '
+            #             'from stock t '
+            #             'where t.volume > 150 '
+            #             'group by t.stock_code').show()
+            result = df.filter('volume > 150') \
+                .groupby('stock_code') \
+                .mean('price') \
+                .withColumnRenamed('avg(price)', 'mean_price')
+            result.show()
+            self.run_result.result_str = time
+        except Exception as e:
+            # TODO
+            #   if error found. stop processor
+            #   for some OLTP, may need to restart the processor.
+            logging.error(e)
+            print(e)
+            self.get_spark_stream_context().stop()
 

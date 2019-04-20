@@ -15,6 +15,7 @@ from enum import Enum, unique
 @unique
 class ProcessStatus(Enum):
     INIT = 'init'
+    FAILED = 'failed'
     RUNING = 'running'
     STOPPED = 'stopped'
     FINISHED = 'finished'

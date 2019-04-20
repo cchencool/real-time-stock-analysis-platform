@@ -39,7 +39,7 @@ class SparkResource(object):
 
         return self
 
-    def build(self):
+    def build_context(self):
         ss = SparkSession.builder.config(conf=self._spark_conf).getOrCreate()
         sc = ss.sparkContext
         self._spark_context = sc
@@ -63,7 +63,7 @@ class SparkResource(object):
         return self._spark_context
 
     def get_spark_session(self) -> SparkSession:
-        # ss = SparkSession.builder.config(conf=self._spark_conf).getOrCreate()
+        self._spark_session = SparkSession.builder.config(conf=self._spark_conf).getOrCreate()
         # return ss
         return self._spark_session
 

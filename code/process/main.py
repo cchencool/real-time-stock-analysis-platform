@@ -5,12 +5,10 @@ import json
 import os
 import logging
 from os.path import join as pjoin
-from flask import Flask, request, make_response, jsonify
+from flask import Flask, request
 
 from utils.processenum import ProcessCommand
-from oltp_service import oltps
-from processor.processors import StockAvgProcessor
-from pojo.datavo import DataVO
+from service.manger import service_manger
 import threading
 
 
@@ -43,30 +41,30 @@ def hello():
 
 # debug
 @app.route("/demo")
-def add_service():
+def add_demo_task():
     pdemo = 'demo'
-    pname_dict = config['pname_dict']
-    if pdemo in pname_dict:
-        pdemo = pname_dict[pdemo]
-    pid = oltps.add_service(pdemo)
+    pparam = aquire_pparam(pdemo)
+    pid, data = service_manger.add_task(**pparam)
     return f'success, pid = {pid}'
 
 
-@app.route("/add_processor")
-def add_oltp_service():
+@app.route("/add_task")
+def add_task():
     pname = request.values.get('pname')
-    pname_dict = config['pname_dict']
-    if pname in pname_dict:
-        pname = pname_dict[pname]
-    pid = oltps.add_service(processor_name=pname)
-    return f'success, pid = {pid}'
+    condition = request.values.get('condition', {})
+    pparam = aquire_pparam(pname)
+    pparam.update(condition)
+    pid, data = service_manger.add_task(**pparam)
+    # TODO maybe should be sync for OLAP
+    #  for OLAP, return data
+    return f"success, pid = {pid}, data={data}"
 
 
 @app.route("/stop_oltp_processor")
 def stop_processor():
     # pid = int(request.values.get('pid'))
     pid = request.values.get('pid')
-    result = oltps.terminate_process(pid=pid)
+    result = service_manger.terminate_process(pid=pid)
     return f"pid: {pid}, status: {result}"
 
 
@@ -74,7 +72,7 @@ def stop_processor():
 def get_curr_oltp_result():
     # pid = int(request.values.get('pid'))
     pid = request.values.get('pid')
-    result = oltps.communicate(pid=pid, cmd=ProcessCommand.GET_CURR_RESULT)
+    result = service_manger.communicate(pid=pid, cmd=ProcessCommand.GET_CURR_RESULT)
     return f"{result}"
 
 
@@ -91,7 +89,7 @@ def init_server(spark_master_host ='spark://localhost:7077'):
     reload_cfg()
     spark_master_host = os.environ.get('SPARK_MASTER_HOST', spark_master_host)
     # sps.set_master(spark_master_host)
-    oltps.set_master(spark_master_host)
+    service_manger.set_master(spark_master_host)
 
     # TODO
     #  1. start db processor from sps (stream process service)
@@ -99,6 +97,14 @@ def init_server(spark_master_host ='spark://localhost:7077'):
     # sps.start_db_store()
 
 
+def aquire_pparam(pname:str) -> dict:
+    pname_dict = config['pname_dict']
+    assert pname in pname_dict
+    pparam = pname_dict[pname]
+    assert isinstance(pparam, dict)
+    return pparam
+
+
 if __name__ == "__main__":
-    app.run(host='localhost', port=5000, debug=True)
     init_server()
+    app.run(host='localhost', port=5000, debug=True)

@@ -2,11 +2,29 @@
   "MSBD5003_PRJ_LOG_PATH": "",
   "SPARK_MASTER_HOST": "",
   "pname_dict": {
-    "demo": "processor.processors.StockAvgProcessor",
-    "dbstore": "processor.processors.DBStoreProcessor",
-    "stream.regression.linear": "processor.stream.StreamLinearRegressionProcessor",
-    "stream.cluster.kmeans": "processor.stream.StreamKMeansProcessor",
-    "batch.regression.linear": "processor.batch.LinearProcessor",
-    "batch.cluster.kmeans": "processor.batch.KMeansProcessor"
+    "demo": {
+      "classname": "processor.processors.StockAvgProcessor",
+      "type": "oltp"
+    },
+    "dbstore": {
+      "classname": "processor.processors.DBStoreProcessor",
+      "type": "oltp"
+    },
+    "stream.regression.linear": {
+      "classname": "processor.stream.StreamLinearRegressionProcessor",
+      "type": "oltp"
+    },
+    "stream.cluster.kmeans": {
+      "classname": "processor.stream.StreamKMeansProcessor",
+      "type": "oltp"
+    },
+    "batch.regression.linear": {
+      "classname": "processor.batch.LinearProcessor",
+      "type": "olap"
+    },
+    "batch.cluster.kmeans": {
+      "classname": "processor.batch.KMeansProcessor",
+      "type": "olap"
+    }
   }
 }
