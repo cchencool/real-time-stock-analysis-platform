@@ -18,16 +18,17 @@ from datetime import datetime as dt
 
 from pyspark.streaming import DStream
 
-from pyspark.sql import SparkSession
+from pyspark import rdd as t_rdd
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
 
-from pojo.datavo import DataVO
-from utils.processenum import ProcessStatus
 from utils.sparkresource import SparkResource
 from database.dbaccess import DataAccess
 
-__all__ = ['BaseProcessor', 'StockAvgProcessor', 'DBStoreProcessor']
+__all__ = ['BaseProcessor', 'ProcessorResult',
+           'ModelingProcessor', 'StreamModelProcessor', 'BatchModelProcessor',
+           'StockAvgProcessor', 'DBStoreProcessor']
 
 
 class ProcessorResult(object):
@@ -36,6 +37,7 @@ class ProcessorResult(object):
         self.result_str = ''
         self.result_list = []
         self.result_dict = []
+        self.inference_result = None
 
 
 class BaseProcessor(SparkResource):
@@ -52,15 +54,18 @@ class BaseProcessor(SparkResource):
         self.master = master
         self.app_name = app_name
         self.run_result = ProcessorResult()
+        self.socket_host = None
+        self.socket_port = None
+        self.ssc_batchDuration = None
 
-    def build(self, **kwargs):
+    def build_context(self, **kwargs):
         """
-        for extra spark config, re-implement this, should call self.config before self.build()
+        for extra spark config, re-implement this, should call self.config before self.build_context()
         :param kwargs:
         :return:
         """
         self.base_config(master=self.master, app_name=self.app_name)
-        super().build()
+        super().build_context()
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
 
@@ -70,10 +75,14 @@ class BaseProcessor(SparkResource):
         :param dstream: input dstream
         :return: None
         """
-        dstream = self.format(dstream=dstream)
-        # process rdds of each batch
-        dstream.foreachRDD(self.processor)
-        # dstream.foreachRDD(self.done)
+        try:
+            dstream = self.format(dstream=dstream)
+            # process rdds of each batch
+            dstream.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
 
     def format(self, dstream: DStream) -> DStream:
         """
@@ -97,7 +106,7 @@ class BaseProcessor(SparkResource):
         field_lines_casted = field_lines.map(cast_types)
         return field_lines_casted
 
-    def processor(self, time, rdd):
+    def processor(self, time, rdd: t_rdd) -> ProcessorResult:
         """
         process program foreach rdd in DStream object.
         This part should also handle the run_result object if necessary.
@@ -108,34 +117,110 @@ class BaseProcessor(SparkResource):
         raise NotImplementedError
 
 
+class ModelingProcessor(BaseProcessor):
+
+    def __init__(self, schema:StructType, mdls=None, algo=None, master='local[2]', app_name='baseProcessor'):
+        """
+        Base class for modeling processors
+        :param schema: data schema
+        :param mdls: modeling service, mdls & algo should both be None or not.
+        :param algo: model algorithm
+        :param master: spark master host
+        :param app_name: app name
+        """
+        super().__init__(self, schema=schema, master=master, app_name=app_name)
+        self.algo = algo
+        self.mdls = mdls
+        self.model = None
+
+    def processor(self, time, rdd:t_rdd=None, df:DataFrame=None) -> ProcessorResult:
+        """
+        oltp will pass rdd; olap will pass dataFrame by the framework
+        :param time:
+        :param rdd:
+        :param df:
+        :return:
+        """
+        if not df and rdd:
+            df = rdd.toDF(schema=self.schema)
+        self.model = self.modeling(df=df)
+        result = self.inference(df=df)
+        self.run_result = self.encapsulate_inference_result(result)
+
+    def modeling(self, df):
+        """
+        if modeling service is not passed when init. using self-defined modeling func
+        should include special feature engineering if needed
+        :param df: the data is for both modeling and inference. (regression / clustering) for next n period
+        :return:
+        """
+        raise NotImplementedError
+
+    def inference(self, df):
+        """
+        if modeling service is not passed when init. using self-defined inference func
+        :param df:
+        :return:
+        """
+        raise NotImplementedError
+
+    def encapsulate_inference_result(self, inference_result) -> ProcessorResult:
+        """
+        encapsulate inference result object returned by spark to system recognized format.
+        :param inference_result:
+        :return:
+        """
+        raise NotImplementedError
+
+
+class StreamModelProcessor(ModelingProcessor):
+
+    def processor(self, time, rdd:t_rdd) -> ProcessorResult:
+        return super().processor(time=time, rdd=rdd)
+
+
+class BatchModelProcessor(ModelingProcessor):
+
+   def processor(self, time, df:DataFrame) -> ProcessorResult:
+       return super().processor(time=time, df=df)
+
+
+############################### classes above are all base class ####################################
+
+
+# demo
 class StockAvgProcessor(BaseProcessor):
     """
     sample process: get the mean price of stock with volume larger than 150.
     you can call model_building_service here
     """
     # def format(self, dstream: DStream) -> DStream:
-
-    def build(self, **kwargs):
+    def build_context(self, **kwargs):
         self.config(spark_cores_max = '2');
-        super().build()
+        super().build_context()
 
-    def processor(self, time, rdd):
-        df = rdd.toDF(schema=self.schema)
-        print(f"{'-'*30}{time}{'-'*30}")
-        # df.createOrReplaceTempView("stock")
-        # self.ss.sql('select t.stock_code, mean(t.price) as mean_price '
-        #             'from stock t '
-        #             'where t.volume > 150 '
-        #             'group by t.stock_code').show()
-        result = df.filter('volume > 150') \
-            .groupby('stock_code') \
-            .mean('price') \
-            .withColumnRenamed('avg(price)', 'mean_price')
-        result.show()
-        self.run_result.result_str = time
-
-    # def done(self, time, rdd):
-    #     pass
+    def processor(self, time, rdd:t_rdd):
+        try :
+            df = rdd.toDF(schema=self.schema)
+            print(f"{'-'*30}{time}{'-'*30}")
+            # df.createOrReplaceTempView("stock")
+            # self.ss.sql('select t.stock_code, mean(t.price) as mean_price '
+            #             'from stock t '
+            #             'where t.volume > 150 '
+            #             'group by t.stock_code').show()
+            result = df.filter('volume > 150') \
+                .groupby('stock_code') \
+                .mean('price') \
+                .withColumnRenamed('avg(price)', 'mean_price')
+            result.show()
+            self.run_result.result_str = time
+        except Exception as e:
+            # TODO
+            #   if error found. stop processor
+            #   for some OLTP, may need to restart the processor.
+            logging.error(e)
+            print(e)
+            self.get_spark_stream_context().stop()
 
 
 '''
@@ -146,50 +231,33 @@ class DBStoreProcessor(BaseProcessor):
     Connect to the MongoDB
     """
     # def format(self, dstream: DStream) -> DStream:
-
-    def build(self, **kwargs):
+    def build_context(self, **kwargs):
         self.config(spark_mongodb_input_uri="mongodb://127.0.0.1/5003.stocks",
                     spark_mongodb_output_uri="mongodb://127.0.0.1/5003.stocks",
                     spark_jars_packages="org.mongodb.spark:mongo-spark-connector_2.11:2.4.0")
-        super().build()
-        # self.ss.config("spark.mongodb.input.uri", "mongodb://127.0.0.1/test.myCollection")
-        # self.ss.config("spark.mongodb.output.uri", "mongodb://127.0.0.1/test.myCollection")
+        super().build_context()
 
     def processor(self, time, rdd):
-        # df = rdd.toDF(schema=self.schema)
-        # df = self.ss.createDataFrame(rdd, self.schema)
-        # df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
-
         # Store data
-        # dao = DataAccess(self.ss)
-        # dao.store_data(rdd, self.schema)
-
-        db = '5003'
-        coll = 'stocks'
-        # Read data
         dao = DataAccess(self.ss)
-        df = dao.get_data(db, coll, True)
-        print(df)
+        dao.store_data(rdd, self.schema)
 
-        # Run SQL
-
-        sql = 'select * from {} where type > 0'.format(coll)
-        sparkDF_sql = dao.run_sql(sql, db, coll)
-        df_sql = sparkDF_sql.collect()
-        print(df_sql)
-
-        # people = self.ss.createDataFrame([("Dojo", 20), ("Gandalf", 1000), ("Thorin", 195), ("Balin", 178), ("Kili", 77),
-        #      ("Dwalin", 169), ("Oin", 167), ("Gloin", 158), ("Fili", 82), ("Bombur", None)], ["name", "age"])
+        # Test the 'Get Data' & 'Run SQL' data access
+        # db = '5003'
+        # coll = 'stocks'
+        # # Read data
+        # dao = DataAccess(self.ss)
+        # df = dao.get_data(db, coll, True)
+        # print(df)
         #
-        # people.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
+        # # Run SQL
+        # sql = 'select * from {} where type > 0'.format(coll)
+        # sparkDF_sql = dao.run_sql(sql, db, coll)
+        # df_sql = sparkDF_sql.collect()
+        # print(df_sql)
 
-        # df = self.ss.read.format("com.mongodb.spark.sql.DefaultSource").load()
 
-        # df = self.ss.read.format("com.mongodb.spark.sql.DefaultSource").option("uri", "mongodb://127.0.0.1/test.myCollection").load()
-        #
-        # df.show()
-
-# if __name__ == '__main__':
-#     dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
-#     dbsp.build()
-#     dbsp.processor(time='', rdd='')
+if __name__ == '__main__':
+    dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
+    dbsp.build()
+    dbsp.processor(time='', rdd='')
