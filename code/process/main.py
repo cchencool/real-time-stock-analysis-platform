@@ -16,8 +16,8 @@ with open('../../config/config.json', 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 logging.basicConfig(level=logging.INFO,
-                    format='[%(asctime)s][%(name)s][%(threadName)s][%(levelname)s][%(message)s]',
-                    filename=pjoin(config['log_file_path'], 'log.log'))
+                    format='[%(asctime)s][%(name)s][%(threadName)s][%(levelname)s][%(message)s]')#,
+                    #filename=pjoin(config['log_file_path'], 'log.log'))
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,16 @@ def hello():
 
 
 # debug
-@app.route("/add_stock_avg_processor")
-def add_service():
-    pid = sps.add_oltp('processor.processors.StockAvgProcessor')
-    return f'success, pid = {pid}'
+# @app.route("/add_stock_avg_processor")
+# def add_service():
+#     pid = sps.add_oltp('processor.processors.StockAvgProcessor')
+#     return f'success, pid = {pid}'
 
+# # debug
+@app.route("/add_df_to_mongodb")
+def add_service():
+    pid = sps.add_oltp('processor.processors.DBStoreProcessor')
+    return f'success, pid = {pid}'
 
 @app.route("/add_processor")
 def add_oltp_service():
@@ -64,6 +69,7 @@ def get_curr_oltp_result():
 
 
 if __name__ == "__main__":
-    SPARK_MASTER_URL = 'spark://localhost:7077'
+    # SPARK_MASTER_URL = 'spark://localhost:7077'
+    SPARK_MASTER_URL = 'spark://zhengdongjiadeMacBook-Pro.local:7077'
     sps.set_master(SPARK_MASTER_URL)
-    app.run(host='localhost', port=5000, debug=True)
+    app.run(host='zhengdongjiadeMacBook-Pro.local', port=5000, debug=True)

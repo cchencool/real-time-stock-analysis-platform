@@ -25,8 +25,9 @@ from pyspark.sql.functions import *
 from pojo.datavo import DataVO
 from utils.processenum import ProcessStatus
 from utils.sparkresource import SparkResource
+from database.dbaccess import DataAccess
 
-__all__ = ['BaseProcessor', 'StockAvgProcessor']
+__all__ = ['BaseProcessor', 'StockAvgProcessor', 'DBStoreProcessor']
 
 
 class ProcessorResult(object):
@@ -136,3 +137,59 @@ class StockAvgProcessor(BaseProcessor):
     # def done(self, time, rdd):
     #     pass
 
+
+'''
+Author: Dojo
+'''
+class DBStoreProcessor(BaseProcessor):
+    """
+    Connect to the MongoDB
+    """
+    # def format(self, dstream: DStream) -> DStream:
+
+    def build(self, **kwargs):
+        self.config(spark_mongodb_input_uri="mongodb://127.0.0.1/5003.stocks",
+                    spark_mongodb_output_uri="mongodb://127.0.0.1/5003.stocks",
+                    spark_jars_packages="org.mongodb.spark:mongo-spark-connector_2.11:2.4.0")
+        super().build()
+        # self.ss.config("spark.mongodb.input.uri", "mongodb://127.0.0.1/test.myCollection")
+        # self.ss.config("spark.mongodb.output.uri", "mongodb://127.0.0.1/test.myCollection")
+
+    def processor(self, time, rdd):
+        # df = rdd.toDF(schema=self.schema)
+        # df = self.ss.createDataFrame(rdd, self.schema)
+        # df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
+
+        # Store data
+        # dao = DataAccess(self.ss)
+        # dao.store_data(rdd, self.schema)
+
+        db = '5003'
+        coll = 'stocks'
+        # Read data
+        dao = DataAccess(self.ss)
+        df = dao.get_data(db, coll, True)
+        print(df)
+
+        # Run SQL
+
+        sql = 'select * from {} where type > 0'.format(coll)
+        sparkDF_sql = dao.run_sql(sql, db, coll)
+        df_sql = sparkDF_sql.collect()
+        print(df_sql)
+
+        # people = self.ss.createDataFrame([("Dojo", 20), ("Gandalf", 1000), ("Thorin", 195), ("Balin", 178), ("Kili", 77),
+        #      ("Dwalin", 169), ("Oin", 167), ("Gloin", 158), ("Fili", 82), ("Bombur", None)], ["name", "age"])
+        #
+        # people.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
+
+        # df = self.ss.read.format("com.mongodb.spark.sql.DefaultSource").load()
+
+        # df = self.ss.read.format("com.mongodb.spark.sql.DefaultSource").option("uri", "mongodb://127.0.0.1/test.myCollection").load()
+        #
+        # df.show()
+
+# if __name__ == '__main__':
+#     dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
+#     dbsp.build()
+#     dbsp.processor(time='', rdd='')

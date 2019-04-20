@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from pyspark.sql import SparkSession
+from pyspark import SparkConf
+
 class DataAccess(object):
 
-    def __init__(self):
-        pass
+    def __init__(self, sps: SparkSession):
+        self.sparkSession = sps
 
-    def run_sql(self, sql:str):
+    def run_sql(self, sql:str, db: str, coll: str):
         """
         run arbitrary sql and get result
-        :param sql: run sql
+        :param sql: run sql (table = coll)
+        :param db: database
+        :param coll: collection or table (coll = table)
         :return: sql result
         """
-        pass
+        uri = "mongodb://127.0.0.1/{}.{}".format(db, coll)
+        try:
+            df = self.sparkSession.read.format("com.mongodb.spark.sql.DefaultSource"). \
+                option("uri", uri). \
+                load()
+            df.createOrReplaceTempView(coll)    # Notice that the table name is equal to 'coll'
+            # a_employees = self.sparkSession.sql("SELECT * FROM temp WHERE FirstName LIKE '%a%'")
+        except:
+            print("Run SQL process failed!")
+            return None
+        else:
+            result = self.sparkSession.sql(sql)
+            print("Run SQL process succeeded!")
+            return result
 
-
-    def get_data(self, table:str, is_batch:bool, *args) -> list:
+    def get_data(self, db:str, coll:str, is_batch:bool, *args) -> list:
         """
         query table data
         :param table: {org*|pred*|model*}
@@ -23,16 +40,35 @@ class DataAccess(object):
         :param args: args for org data query
         :return:
         """
-        pass
+        uri = "mongodb://127.0.0.1/{}.{}".format(db, coll)
+        try:
+            df = self.sparkSession.read.format("com.mongodb.spark.sql.DefaultSource"). \
+            option("uri", uri). \
+            load()
+            result = df.collect()
+        except:
+            print("Get data process failed!")
+            return  None
+        else:
+            print("Get data process succeeded!")
+            return result
 
 
-    def store_data(self, table:str, is_batch:bool, *args) -> bool:
+    def store_data(self, rdd, schema, *args) -> bool:
         """
         store data into table
-        :param table: {org*|pred*|model*}
-        :param is_batch: store data in batch mode or single line
+        :param rdd: the source data in rdd
+        :param schema: the schema of the data
         :param args: data & params to store
         :return:
         """
-        pass
+        try:
+            df = self.sparkSession.createDataFrame(rdd, schema)
+            df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
+        except:
+            print("Store data process failed!")
+            return False
+        else:
+            print("Store data process succeeded!")
+            return True
 

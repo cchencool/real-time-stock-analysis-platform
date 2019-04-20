@@ -33,7 +33,7 @@ def handle_client(client_socket):
     # req = client_socket.recv(1024)
     # thread_name = threading.current_thread().getName()
     logger.info(f"start sending...")
-    with open('../../data/10stock_tick_data.csv', 'r') as f:
+    with open('../../data/997stock_3day_tick_data.csv', 'r') as f:
         while True:
             s = f.readline()
             logger.info(f"send - {s}")
