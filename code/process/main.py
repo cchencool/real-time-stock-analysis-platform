@@ -99,7 +99,7 @@ def get_curr_oltp_result():
     if pparam is not None:
         status, data = service_manger.communicate(pid=pid, pname=pparam['classname'], cmd=ProcessCommand.GET_CURR_RESULT)
         status = status.value if status is not None else 'failed'
-        result.update({'status': status, 'data': data})
+        result.update({'status': status, 'data': data})#json.JSONEncoder().encode(data)})
     response = make_response(jsonify(result), 200)
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
