@@ -58,7 +58,9 @@ def add_demo_task():
 @app.route("/add_task")
 def add_task():
     pname = request.values.get('pname')
-    condition = request.values.get('condition', {})
+    condition = {}#request.values.get('condition', {})
+    for k in request.values:
+        condition[k] = request.values[k]
     pparam = aquire_pparam(pname)
     result = {'status': 'failed', 'data': None}
     if pparam is not None:
@@ -97,8 +99,17 @@ def get_curr_oltp_result():
     if pparam is not None:
         status, data = service_manger.communicate(pid=pid, pname=pparam['classname'], cmd=ProcessCommand.GET_CURR_RESULT)
         status = status.value if status is not None else 'failed'
-        result.update({'status': status, 'data':{'status': data}})
+        result.update({'status': status, 'data': data})
     response = make_response(jsonify(result), 200)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+@app.route("/get_curr_oltp_result_debug")
+def get_curr_oltp_result_debug():
+    with open('../../data/response_debug.json', 'r') as f:
+        data = json.load(f)
+    response = make_response(jsonify(data), 200)
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response
 

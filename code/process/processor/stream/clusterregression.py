@@ -47,7 +47,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cluster_num = kwargs.get('cluster_num', 2)
+        self.cluster_num = int(kwargs.get('cluster_num', 2))
 
     def handle(self, data):
         # data.pprint()
@@ -57,7 +57,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
         # window width is twice as the batchInterval where each interval slide only 1 time of the batchInterval
         dataStream = data.window(batchInterval * 3, batchInterval)
         dataStream = dataStream.transform(lambda time, rdd: self.transformer(time, rdd))
-        # dataStream.pprint()
+        dataStream.pprint()
         kmeanSchema = DataVO.get_schema()
 
         # cluster number
@@ -84,16 +84,19 @@ class ClusterRegressionProcessor(StreamingProcessor):
         #   and another one future price: + 1
         dim = (orgfeature_count) * (shift_count + 1) + 1
         model = StreamingKMeans(k=numClusters, decayFactor=1.0).setRandomCenters(dim, 1.0, 5003)  # dim weight seed
-        # train & pred on streams get result: dstream ==> (label, clusterID)
+        # train & pred on streams get kmean_result: dstream ==> (label, clusterID)
         model.trainOn(trainS)
-        result = model.predictOnValues(predS)
-        # the result will be like same label have multiple clusters, which each row belongs to 1 timepoint.
+        kmean_result = model.predictOnValues(predS)
+        # the kmean_result will be like same label have multiple clusters, which each row belongs to 1 timepoint.
         # therefore, requring a groupby to eliminate the duplicated labels (stock_code).
         # using mode as cluster for the stock; require scipy.stats
-        result = result.groupByKey().mapValues(lambda v: float(stats.mode(list(v)).mode[0]))
-        result.pprint()
-        result = result.cache()
-        # # result.foreachRDD(lambda rd: print(rd.lookup(1)))
+        kmean_result = kmean_result.groupByKey().mapValues(lambda v: float(stats.mode(list(v)).mode[0]))
+        # kmean_result.pprint()
+        kmean_result.foreachRDD(lambda rdd: self.encapsulate_kmean(rdd))
+
+        kmean_result = kmean_result.cache()
+
+        # # kmean_result.foreachRDD(lambda rd: print(rd.lookup(1)))
 
         # this method must be here, not in another class as static method; is was used in map func.
         def flattenLine(v):
@@ -111,7 +114,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
         # kstream.pprint()
         # join the data points with label
         # (stock_code, (cluster_id, [time, stock_code, features:list, label]))
-        jstream = result.join(kstream)
+        jstream = kmean_result.join(kstream)
         # [cluster_id, time, stock_code, features:list, label], remove extra stock_code
         jstream = jstream.map(flattenLine).map(lambda v: v[1:])
         # jstream.pprint()
@@ -141,7 +144,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
             #clsstream = branch(rdatastream, cls).cache()
             # clsstream = clsstream
             cls_streams[cls] = branch(rdatastream, cls)#.cache() #clsstream
-            # cls_streams[cls].pprint()
+            cls_streams[cls].pprint()
 
         ## do regression
         # features exclude colume 'cluster_id', 'time', 'stock_code', 'lead1-Y'
@@ -153,8 +156,8 @@ class ClusterRegressionProcessor(StreamingProcessor):
         for cls in range(numClusters):
             cls_train_stream[cls] = MDLUtils.rparse_train(cls_streams[cls])
             cls_pred_stream[cls] = MDLUtils.rparse_pred(cls_streams[cls])
-            cls_train_stream[cls].pprint()
-            cls_pred_stream[cls].pprint()
+            # cls_train_stream[cls].pprint()
+            # cls_pred_stream[cls].pprint()
 
             '''
             FIXME: for Demo
@@ -201,6 +204,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
 
     def encapsulate_real(self, cls, rdd):
         res_dic = self.run_result#.result_dict
+        cls = str(cls)
         cls_dic = res_dic.get(cls, dict())
         # (time_dt, (label=real_price, features)) -> (time, real_price)
         data = rdd.map(lambda v: (dt.strftime(v[0], '%Y-%m-%d %H:%M:%S'), v[1].label)).collect()
@@ -212,6 +216,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
 
     def encapsulate_pred(self, cls, rdd):
         res_dic = self.run_result#.result_dict
+        cls = str(cls)
         cls_dic = res_dic.get(cls, dict())
         # (time, pred_price)
         data = rdd.collect()
@@ -222,6 +227,17 @@ class ClusterRegressionProcessor(StreamingProcessor):
         res_dic.update({cls: cls_dic})
         print(f"{res_dic}")
 
+    def encapsulate_kmean(self, rdd):
+        res_dic = self.run_result
+        km_dic = dict() #res_dic.get('kmean', dict())
+        data = rdd.collect()
+        if len(data) > 0:
+            for id, clz in data:
+                clz = str(clz)
+                km_dic.update({clz: km_dic.get(clz, 0) + 1})
+        if len(km_dic) > 0:
+            res_dic.update({'kmean': km_dic})
+        print(km_dic)
     # result_dict = {
     #     'real': {
     #         'cls1': [[], [], [], [], ],
@@ -319,8 +335,8 @@ class MDLUtils(object):
         # 4. transback to rdd
         rdd_out = df_fe.rdd.map(MDLUtils.map_df_to_rdd)
 
-        # 5. drop rows with None feature values after shift. Except for lead-Y, which is the last col of the rdd
-        rdd_out = rdd_out.filter(lambda v: None not in v[:-1])
+        # # 5. drop rows with None feature values after shift. Except for lead-Y, which is the last col of the rdd
+        # rdd_out = rdd_out.filter(lambda v: None not in v[:-1])
 
         # 6. drop time column, which is the first column.
         #     rdd_out = rdd_out.map(lambda v: v[1:])
