@@ -19,7 +19,7 @@ from pojo.datavo import DataVO
 from utils.processenum import ProcessStatus
 from utils.moduletools import reflect_inst, castparam
 from processor.processors import BaseProcessor
-
+from pyspark.streaming.listener import StreamingListener
 from multiprocessing import Process, Pipe
 from threading import Lock
 
@@ -60,7 +60,7 @@ class TaskManger(object):
         # check processor/task cache to determine whether start a new one
         pid = self._check_processor_pid(processor=classname)
         algo_param = kwargs.get('algo_param', dict()) # algo_param for processor params.
-        algo_param.update({"batchDuration":15})
+        algo_param.update({"batchDuration":10})
         # no cache, or process is already dead.
         if pid is None:
             from .oltp_service import OLTPProcess
@@ -116,13 +116,22 @@ class TaskManger(object):
                 logging.info(f"find cache process for {processor}, pid: {pid}")
             else:
                 logging.info(f"find dead process for {processor}, pid: {pid}")
-                self.terminate_process(pid)
+                self.terminate_process(pid=pid, pname=processor)
         return pid
 
+    def _get_pid_by_processor(self, pname):
+        cache_locker.acquire()
+        pid = self.processor_to_pid.get(pname, -1)
+        cache_locker.release()
+        return pid
 
     @castparam({'pid':int})
-    def terminate_process(self, pid):
-        result = "pid not found"
+    def terminate_process(self, pid, pname):
+        result = ProcessStatus.FAILED
+        if pid is None and pname is not None:
+            pid = self._get_pid_by_processor(pname)
+            if pid == -1:
+                return ProcessStatus.FAILED
         cache_locker.acquire()
         if pid in self.process_dict:
             p, conn = self.process_dict.pop(pid)
@@ -133,23 +142,30 @@ class TaskManger(object):
                 p.terminate()
             except Exception as e:
                 pass
-            result = "success"
+            result = ProcessStatus.SUCCESS
         else:
             cache_locker.release()
         return result
 
     @castparam({'pid':int})
-    def communicate(self, pid, cmd):
+    def communicate(self, pid, pname, cmd):
         status = None
         result = None
-        self._check_processor_pid(pid=pid)
+        if pid is not None:
+            self._check_processor_pid(pid=pid)
+        elif pname is not None:
+            pid = self._get_pid_by_processor(pname=pname)
+            if pid == -1:
+                return ProcessStatus.FAILED, None
+        else:
+            return ProcessStatus.FAILED, None
         cache_locker.acquire()
         if pid in self.process_dict:
             p, conn = self.process_dict[pid]
             cache_locker.release()
             conn.send(cmd)
             status, run_result = conn.recv()
-            result = run_result.result_str
+            result = run_result
         else:
             cache_locker.release()
         return status, result

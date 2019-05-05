@@ -30,7 +30,7 @@ def castparam(cast_dict:dict=dict()):
             print(f"args: {args}")
             print(f"kwargs: {kwargs}")
             for k in cast_dict:
-                if k in kwargs:
+                if k in kwargs and kwargs[k] is not None:
                     kwargs.update({k :cast_dict[k](kwargs[k])})
             return func(*args, **kwargs)
         return wrapper

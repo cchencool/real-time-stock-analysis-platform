@@ -15,6 +15,7 @@ from enum import Enum, unique
 @unique
 class ProcessStatus(Enum):
     INIT = 'init'
+    SUCCESS = 'successe' # only for communication operation
     FAILED = 'failed'
     RUNING = 'running'
     STOPPED = 'stopped'

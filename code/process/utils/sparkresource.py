@@ -27,7 +27,7 @@ class SparkResource(object):
 
     def config(self, **kwargs):
         config = self._spark_conf
-        spark_cores_max = kwargs.get("spark_cores_max", "4")
+        spark_cores_max = kwargs.get("spark_cores_max", "8")
         spark_max_memory = kwargs.get("spark_max_memory", "4g")
         spark_executor_memory= kwargs.get("spark_executor_memory", "4g")
         spark_driver_memory = kwargs.get("spark_driver_memory", "2g")

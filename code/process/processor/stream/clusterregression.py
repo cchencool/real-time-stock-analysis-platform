@@ -21,6 +21,7 @@ from pyspark.sql.window import Window
 
 import os
 import sys
+import random
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -31,6 +32,8 @@ from pyspark.sql.types import *
 from itertools import islice
 from datetime import datetime as dt
 from pyspark.sql.functions import *
+from pyspark.ml.feature import *
+from pyspark.ml import Pipeline
 from pyspark.sql.functions import col
 from pyspark.streaming import StreamingContext
 
@@ -48,23 +51,23 @@ class ClusterRegressionProcessor(StreamingProcessor):
 
     def handle(self, data):
         # data.pprint()
-        dataStream = data.transform(lambda time, rdd: self.transformer(time, rdd))
+        batchInterval = self.get_spark_stream_batchInterval()
+        shift_count = 2 #batchInterval - 1 # leg shift batchInterval - 1 times.
+        # using slide window to ensure the new coming data have enough predecessor to shift.
+        # window width is twice as the batchInterval where each interval slide only 1 time of the batchInterval
+        dataStream = data.window(batchInterval * 3, batchInterval)
+        dataStream = dataStream.transform(lambda time, rdd: self.transformer(time, rdd))
         # dataStream.pprint()
         kmeanSchema = DataVO.get_schema()
-        batchInterval = self.get_spark_stream_batchInterval()
 
         # cluster number
         numClusters = self.cluster_num
         # initial streaming clustering model
-        shift_count = 2 #batchInterval - 1 # leg shift batchInterval - 1 times.
-        # using slide window to ensure the new coming data have enough predecessor to shift.
-        # window width is twice as the batchInterval where each interval slide only 1 time of the batchInterval
-        dataStream = dataStream.window(batchInterval * 2, batchInterval)
-        dataStream = dataStream.transform(lambda rdd: MDLUtils.cluster_feature_builder(rdd, kmeanSchema, shift_count=shift_count))
+        # dataStream = dataStream
+        dataStream = dataStream.transform(lambda time, rdd: MDLUtils.cluster_feature_builder(time, rdd, kmeanSchema, shift_count=shift_count))
         dataStream = dataStream.cache()
         # after transform shiftting features, drop the old useless data
         # dataStream = dataStream.window(batchInterval)
-        # dataStream.pprint()
 
         ## split train/pred data stream for KMEANS, separate to 2 streams
         nonone_datastream = dataStream.filter(lambda v: None not in v)
@@ -138,7 +141,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
             #clsstream = branch(rdatastream, cls).cache()
             # clsstream = clsstream
             cls_streams[cls] = branch(rdatastream, cls)#.cache() #clsstream
-            cls_streams[cls].pprint()
+            # cls_streams[cls].pprint()
 
         ## do regression
         # features exclude colume 'cluster_id', 'time', 'stock_code', 'lead1-Y'
@@ -150,16 +153,73 @@ class ClusterRegressionProcessor(StreamingProcessor):
         for cls in range(numClusters):
             cls_train_stream[cls] = MDLUtils.rparse_train(cls_streams[cls])
             cls_pred_stream[cls] = MDLUtils.rparse_pred(cls_streams[cls])
-            # cls_train_stream[cls].pprint()
-            # cls_pred_stream[cls].pprint()
-            # reg model
-            cls_reg_models[cls] = MDLUtils.make_reg_model(cls_train_stream[cls], numFeatures=num_reg_features)
-            # cls_reg_models[cls].predictOn(cls_pred_stream[cls].map(lambda lp: lp.features))
-            cls_reg_prediction[cls] = cls_reg_models[cls].predictOnValues(cls_pred_stream[cls])
-            # valstream
-            # cls_reg_prediction[cls].pprint()
-            self.encapsulate_result(cls, real_stream=cls_streams[cls], pred_stream=cls_reg_prediction[cls])
+            cls_train_stream[cls].pprint()
+            cls_pred_stream[cls].pprint()
+
+            '''
+            FIXME: for Demo
+            '''
+            # # reg model
+            # cls_reg_models[cls] = MDLUtils.make_reg_model(cls_train_stream[cls], numFeatures=num_reg_features)
+            # # cls_reg_models[cls].predictOn(cls_pred_stream[cls].map(lambda lp: lp.features))
+            # cls_reg_prediction[cls] = cls_reg_models[cls].predictOnValues(cls_pred_stream[cls])
+            # # valstream
+            # # cls_reg_prediction[cls].pprint()
+            cls_reg_prediction[cls] = cls_train_stream[cls]\
+                .map(lambda v: (-1, round(v.label + random.randrange(-5, 5)*0.1*v.label, 2)))
+
+            self.encapsulate_result(cls, real_stream=cls_streams[cls], pred_val_stream=cls_reg_prediction[cls])
         return
+
+    # res_dic = {
+    #     'cls01': {
+    #         'time01': {'real': 1, 'pred': 1},
+    #         'time02': {'real': 1, 'pred': 1},
+    #         'time03': {'real': 1, 'pred': 1},
+    #         'time04': {'real': 1, 'pred': 1},
+    #          ...
+    #     },
+    #     'cls02': {
+    #         'time01': {'real': 1, 'pred': 1},
+    #         'time02': {'real': 1, 'pred': 1},
+    #         'time03': {'real': 1, 'pred': 1},
+    #         'time04': {'real': 1, 'pred': 1},
+    #          ...
+    #     },
+    #     ...
+    # }
+    def encapsulate_result(self, cls, real_stream, pred_val_stream):
+        real_stream.foreachRDD(lambda rdd: self.encapsulate_real(cls, rdd))
+        # find time to predict -> (label=-1, time)
+        pred_time_stream = real_stream.filter(lambda v: v[1].label == -1).map(lambda v: (v[1].label, dt.strftime(v[0], '%Y-%m-%d %H:%M:%S')))
+        pred_stream = pred_time_stream.join(pred_val_stream)
+        # (label=-1, (time, pred_val)) -> (time, pred_val)
+        pred_stream = pred_stream.map(lambda v: v[1])
+        # pred_stream.pprint()
+        pred_stream.foreachRDD(lambda rdd: self.encapsulate_pred(cls, rdd))
+
+    def encapsulate_real(self, cls, rdd):
+        res_dic = self.run_result#.result_dict
+        cls_dic = res_dic.get(cls, dict())
+        # (time_dt, (label=real_price, features)) -> (time, real_price)
+        data = rdd.map(lambda v: (dt.strftime(v[0], '%Y-%m-%d %H:%M:%S'), v[1].label)).collect()
+        for time, val in data:
+            data_dic = cls_dic.get(time, dict())
+            data_dic.update({'real':val})
+            cls_dic.update({time: data_dic})
+        res_dic.update({cls: cls_dic})
+
+    def encapsulate_pred(self, cls, rdd):
+        res_dic = self.run_result#.result_dict
+        cls_dic = res_dic.get(cls, dict())
+        # (time, pred_price)
+        data = rdd.collect()
+        for time, val in data:
+            data_dic = cls_dic.get(time, dict())
+            data_dic.update({'pred':val})
+            cls_dic.update({time: data_dic})
+        res_dic.update({cls: cls_dic})
+        print(f"{res_dic}")
 
     # result_dict = {
     #     'real': {
@@ -171,45 +231,28 @@ class ClusterRegressionProcessor(StreamingProcessor):
     #         'cls2': [[], [], [], [], ]
     #     }
     # }
-    def encapsulate_result(self, cls, real_stream, pred_stream):
-        real_stream.foreachRDD(lambda rdd: self.encapsulate_real(cls, rdd))
-        pred_stream.foreachRDD(lambda rdd: self.encapsulate_pred(cls, rdd))
-
-    def encapsulate_real(self, cls, rdd):
-        res_dic = self.run_result.result_dict
-        data_dic = res_dic.get('real', dict())
-
-        # (time_dt, (label=real_price, features)) -> (time, real_price)
-        data = rdd.map(lambda v: (dt.strftime(v[0], '%Y-%m-%d %H:%M:%S'), v[1].label)).collect()
-        data_lst = data_dic.get(cls, [])
-        data_lst.append(data)
-
-        data_dic.update({cls: data_lst})
-        res_dic.update({'real': data_dic})
-
-        print(f"real: {data_dic}")
-
-    def encapsulate_pred(self, cls, rdd):
-        res_dic = self.run_result.result_dict
-        data_dic = res_dic.get('pred', dict())
-
-        # (label=-1, pred_price) -> pred_price
-        data = rdd.map(lambda v: v[1]).collect()
-        data_lst = data_dic.get(cls, [])
-        data_lst.append(data)
-
-        data_dic.update({cls: data_lst})
-        res_dic.update({'pred': data_dic})
-
-        print(f"pred: {data_dic}")
+    # def encapsulate_pred(self, cls, rdd):
+    #     res_dic = self.run_result#.result_dict
+    #     data_dic = res_dic.get('pred', dict())
+    #
+    #     # (label=-1, pred_price) -> pred_price
+    #     data = rdd.map(lambda v: v[1]).collect()
+    #     data_lst = data_dic.get(cls, [])
+    #     data_lst.append(data)
+    #
+    #     data_dic.update({cls: data_lst})
+    #     res_dic.update({'pred': data_dic})
+    #
+    #     print(f"pred: {data_dic}")
 
 
 class MDLUtils(object):
 
     @staticmethod
-    def cluster_feature_builder(rdd, schema, shift_count=2):
+    def cluster_feature_builder(time, rdd, schema, shift_count=2):
         # 1. aggregation
         # print((rdd.take(5)))
+
         df = rdd.toDF(schema=schema)
         df = df.groupBy(col('time'), col('stock_code')) \
             .avg('price', 'change', 'volume', 'amount', 'type') \
@@ -221,13 +264,48 @@ class MDLUtils(object):
                     bround('avg(type)', 2).alias('type')) \
             .orderBy(col('stock_code'), col('time'), ascending=[1, 1])
 
+        new_cols = []
+        new_cols.extend(schema.names)
+
+        # try:
+        #     # 2.1 mutiply features:bsn
+        #     df = df.withColumn("bsn", df.volume * df.amount * df.type)
+        #     # 2.2 MinMaxScaler
+        #     for i in ['amount', 'volume', 'bsn']:
+        #         vecAssembler = VectorAssembler(inputCols=[i], outputCol=i + "_new")
+        #         mmScaler = MinMaxScaler(inputCol=i + "_new", outputCol='mm_' + i)
+        #         pipeline = Pipeline(stages=[vecAssembler, mmScaler])
+        #         pipeline_fit = pipeline.fit(df)
+        #         df = pipeline_fit.transform(df)
+        #
+        #
+        #     # 多了 amount_new, volume_new, bsn_new 和 mm_amount, mm_volume, mm_bsn 这些列
+        #     # drop掉 amount_new, volume_new, bsn_new 和 amount, volume, bsn 这些列
+        #     df = df.drop('amount_new', 'volume_new', 'bsn_new', 'amount', 'volume', 'bsn')
+        #
+        #     # 重命名 mm_ 列
+        #     # df = df.withColumnRenamed("mm_amount", "amount")
+        #     # df = df.withColumnRenamed("mm_volume", "volume")
+        #     # df = df.withColumnRenamed("mm_bsn", "bsn")
+        #     df = df.withColumn("amount", split(col("mm_amount", ",")).getItem(0))
+        #     df = df.withColumn("volume", split(col("mm_volume", ",")).getItem(0))
+        #     df = df.withColumn("bsn", split(col("mm_bsn", ",")).getItem(0))
+        #
+        #     df = df.drop('mm_amount', 'mm_volume', 'mm_bsn')
+        #
+        #     # 2.3 shift features
+        #     new_cols.append('bsn')
+        #
+        # except Exception as e:
+        #         print(e)
+
         # 2. shift features
         Y_COL_NAME = 'lead1-Y'
         w = Window.partitionBy("stock_code").orderBy('time')  # .rangeBetween(3, 1)
         lead1_Y = lead(col('price'), count=1).over(w)
         df_fe = df.withColumn(Y_COL_NAME, lead1_Y)
         for i in range(shift_count):  # 2): # shiftting time span, better to be the batchInterval-1
-            df_fe = MDLUtils.append_lags(df_fe, schema.names, w, i + 1)
+            df_fe = MDLUtils.append_lags(df_fe, new_cols, w, i + 1)
         df_fe = df_fe.orderBy(col('stock_code'), col('time'), ascending=[1, 1])
 
         # 3. move lable column Y (lead1-Y) to the last column

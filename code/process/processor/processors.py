@@ -53,7 +53,7 @@ class BaseProcessor(SparkResource):
         self.sc = None
         self.master = master
         self.app_name = app_name
-        self.run_result = ProcessorResult()
+        self.run_result = dict()#ProcessorResult()
         self.socket_host = None
         self.socket_port = None
         self.ssc_batchDuration = None
@@ -241,7 +241,7 @@ class StockAvgProcessor(StreamingProcessor):
                 .mean('price') \
                 .withColumnRenamed('avg(price)', 'mean_price')
             result.show()
-            self.run_result.result_str = time
+            self.run_result.update({time: 'success'})#.result_str = time
         except Exception as e:
             # TODO
             #   if error found. stop processor
