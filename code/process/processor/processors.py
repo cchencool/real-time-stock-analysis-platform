@@ -46,7 +46,7 @@ class BaseProcessor(SparkResource):
     Some processor can implement as stateful computation
     Should be applied in single process, because the only one spark-session can running in one JVM
     """
-    def __init__(self, schema:StructType, master='local[2]', app_name='baseProcessor'):
+    def __init__(self, schema:StructType, master='local[2]', app_name='baseProcessor', *args, **kwargs):
         super().__init__()
         self.schema = schema
         self.ss = None
@@ -64,12 +64,12 @@ class BaseProcessor(SparkResource):
         :param kwargs:
         :return:
         """
-        self.base_config(master=self.master, app_name=self.app_name)
+        self.base_config(master=self.master, app_name=self.app_name).config()
         super().build_context()
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
 
-    def transform(self, data):
+    def transformer(self, data):
         """
         transform before handle
         :param data:
@@ -88,24 +88,26 @@ class BaseProcessor(SparkResource):
 
 class StreamingProcessor(BaseProcessor):
 
-    def transform(self, dstream: DStream) -> DStream:
+    def transformer(self, time, rdd: t_rdd) -> t_rdd:
         """
         Transform the DStream to required structure.
         :param dstream: input dstream
         :return: transformed dstream
         """
+        # print(f"first transform {time}")
         # ['----'] -> ['-','-','-']
-        lines = dstream.flatMap(lambda lines: lines.split('\n'))
+        lines = rdd.flatMap(lambda lines: lines.split('\n'))
         # lines.map(lambda line: line.split(',')).map(lambda rec: str(DataVO.ecapsulate(rec))).pprint()
         # ['-', '-', '-'] -> [ ['f', 'f', 'f'], ['f', 'f', 'f'],... ]
         field_lines = lines.map(lambda line: line.split(','))
         # TODO re-implement cast_type function. do this based on self.schema object
         # cast string to column schema
         def cast_types(line: list) -> list:
+            formant = '%Y-%m-%d %H:%M:%S'
             try:
-                l = [dt.strptime(line[0], '%Y-%m-%d %X'), float(line[1]), float(line[2]), float(line[3]), float(line[4]), line[5], line[6]]
+                l = [dt.strptime(line[0], formant), float(line[1]), float(line[2]), float(line[3]), float(line[4]), float(line[5]), float(line[6])]
             except ValueError as e:
-                l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, '-1', '-1']
+                l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
             return l
         field_lines_casted = field_lines.map(cast_types)
         return field_lines_casted
@@ -117,28 +119,18 @@ class StreamingProcessor(BaseProcessor):
         :return: None
         """
         try:
-            data = self.transform(dstream=data)
+            data = data.transform(self.transformer)
             # process rdds of each batch
-            data.foreachRDD(self.processor)
         except Exception as e:
             logging.error(e)
             print(e)
-            return
 
-    def processor(self, time, rdd: t_rdd) -> ProcessorResult:
-        """
-        process program foreach rdd in DStream object.
-        This part should also handle the run_result object if necessary.
-        :param time:
-        :param rdd:
-        :return:
-        """
-        raise NotImplementedError
+        return data
 
 
 class ModelingProcessor(BaseProcessor):
 
-    def __init__(self, schema:StructType, algo=None, master='local[2]', app_name='baseProcessor'):
+    def __init__(self, schema:StructType, algo=None, master='local[2]', app_name='baseProcessor', *args, **kwargs):
         """
         Base class for modeling processors
         :param schema: data schema
@@ -151,7 +143,7 @@ class ModelingProcessor(BaseProcessor):
         self.model = None
 
     def handle(self, data):
-        data = self.transform(data=data)
+        data = data.transform(lambda time, rdd: self.transformer(time, rdd))
         self.model = self.modeling(data=data)
         result = self.inference(data=data)
         self.run_result = self.encapsulate_inference_result(result)
@@ -182,10 +174,10 @@ class ModelingProcessor(BaseProcessor):
         raise NotImplementedError
 
 
-class StreamModelProcessor(ModelingProcessor):
+class StreamModelProcessor(StreamingProcessor, ModelingProcessor):
 
-    def transform(self, data: DStream) -> DStream:
-        raise NotImplementedError
+    # def transform(self, data: DStream) -> DStream:
+    #     raise NotImplementedError
 
     def modeling(self, data: DStream) -> DStream:
         raise NotImplementedError
@@ -196,7 +188,7 @@ class StreamModelProcessor(ModelingProcessor):
 
 class BatchModelProcessor(ModelingProcessor):
 
-    def transform(self, data: DataFrame) -> DataFrame:
+    def transformer(self, data: t_rdd) -> t_rdd:
         raise NotImplementedError
 
     def modeling(self, data: DataFrame) -> DataFrame:
@@ -219,6 +211,21 @@ class StockAvgProcessor(StreamingProcessor):
     def build_context(self, **kwargs):
         self.config(spark_cores_max = '2');
         super().build_context()
+
+    def handle(self, data: DStream):
+        """
+        Stream Handler
+        :param data: input dstream
+        :return: None
+        """
+        try:
+            dataStream = data.transform(lambda time, rdd: self.transformer(time, rdd))
+            # process rdds of each batch
+            dataStream.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
 
     def processor(self, time, rdd:t_rdd):
         try :
@@ -267,6 +274,22 @@ class DBStoreProcessor(StreamingProcessor):
                     spark_mongodb_output_uri="mongodb://127.0.0.1/5003.stocks",
                     spark_jars_packages="org.mongodb.spark:mongo-spark-connector_2.11:2.4.0")
         super().build_context()
+
+    def handle(self, data: DStream):
+
+        """
+        Stream Handler
+        :param data: input dstream
+        :return: None
+        """
+        try:
+            dataStream = data.transform(lambda time, rdd: self.transformer(time, rdd))
+            # process rdds of each batch
+            dataStream.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
 
     def processor(self, time, rdd):
         # Store data

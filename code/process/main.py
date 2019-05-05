@@ -61,7 +61,7 @@ def add_task():
     condition = request.values.get('condition', {})
     pparam = aquire_pparam(pname)
     pparam.update(condition)
-    pid, data = service_manger.add_task(**pparam)
+    pid, data = service_manger.add_task(**pparam, algo_param=condition)
     # TODO maybe should be sync for OLAP
     #  for OLAP, return data
     return f"success, pid = {pid}, data={data}"

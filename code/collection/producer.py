@@ -8,6 +8,7 @@ import logging
 import socket
 import time
 import threading
+from datetime import datetime as dt
 
 logging.basicConfig(level=logging.INFO,
                     format='[%(asctime)s][%(name)s][%(levelname)s][%(threadName)s][%(message)s]')
@@ -33,16 +34,33 @@ def handle_client(client_socket):
     # req = client_socket.recv(1024)
     # thread_name = threading.current_thread().getName()
     logger.info(f"start sending...")
-    with open('../../data/997stock_3day_tick_data.csv', 'r') as f:
+    formant = '%Y-%m-%d %H:%M:%S'
+    now = None
+    send_now = ""
+    with open('../../data/997stock_3day_tick_data_sortby_time.csv', 'r') as f:
         while True:
             s = f.readline()
-            logger.info(f"send - {s}")
-            try:
-                client_socket.send(s.encode('utf-8'))
-            except Exception as e:
-                logger.info('lost conn.')
-                return
-            time.sleep(1)
+            current_time = s.split(",")[0]
+            if current_time == 'time':
+                continue
+            else:
+                t = dt.strptime(current_time, formant)
+            if now is None:
+                now = t
+                send_now += s
+            elif now == t:
+                send_now += s
+            elif now != t:
+                v = len(send_now.split("\n"))
+                logger.info(f"send - {v} rows")
+                try:
+                    client_socket.send(send_now.encode('utf-8'))
+                except Exception as e:
+                    logger.info('lost conn.')
+                    return
+                time.sleep(5)
+                send_now = ""
+                now = t
 
 
 if __name__ == "__main__":

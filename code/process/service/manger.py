@@ -48,7 +48,7 @@ class TaskManger(object):
     def set_stream_port(self, port=5003):
         self.stream_port = port
 
-    def add_task(self, classname:str, type:str):
+    def add_task(self, classname:str, type:str, **kwargs):
         global counter, counter_locker
         # TODO
         #  1. Add process management. process pool
@@ -59,6 +59,8 @@ class TaskManger(object):
         data = None
         # check processor/task cache to determine whether start a new one
         pid = self._check_processor_pid(processor=classname)
+        algo_param = kwargs.get('algo_param', dict()) # algo_param for processor params.
+        algo_param.update({"batchDuration":15})
         # no cache, or process is already dead.
         if pid is None:
             from .oltp_service import OLTPProcess
@@ -72,7 +74,7 @@ class TaskManger(object):
             else:
                 raise ValueError(f"processor type should be either OLAP or OLTP! {type} was given")
 
-            p = clz(classname, child_conn, master=self.master, stream_port=self.stream_port)
+            p = clz(classname, child_conn, master=self.master, stream_port=self.stream_port, algo_param=algo_param)
             try:
                 p.start()
                 pstatus = parent_conn.recv()
@@ -169,11 +171,14 @@ class BaseTaskProcess(Process):
         self.stream_port = kwargs.get('stream_port', 5003)
         self.batchDuration = kwargs.get('batchDuration', 5)
 
+        algo_param = kwargs.get('algo_param', dict())
+
         # using reflect to create process instance
         self.sps : BaseProcessor = reflect_inst(processor_name,
                                                 schema=DataVO.get_schema(),
                                                 master=self.master,
-                                                app_name=self.app_name)
+                                                app_name=self.app_name,
+                                                **algo_param)
 
     def run(self):
         raise NotImplementedError

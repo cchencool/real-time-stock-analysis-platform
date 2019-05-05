@@ -7,7 +7,6 @@
 # @File    : regression.py
 # @Software: PyCharm
 from pyspark.sql import DataFrame
-from pyspark.streaming import DStream
 
 __author__ = "chen"
 
@@ -24,7 +23,7 @@ class LinearRegression(BatchModelProcessor):
     def modeling(self, data: DataFrame) -> DataFrame:
         pass
 
-    def inference(self, data: DataFrame) -> DStream:
+    def inference(self, data: DataFrame) -> DataFrame:
         pass
 
     def encapsulate_inference_result(self, inference_result) -> ProcessorResult:

@@ -25,9 +25,9 @@ class DataVO(object):
         Get DataFrame schema
         :return: StructType
         """
-        fields = ['time', 'price', 'change', 'volume', 'amount', 'type', 'stock_code']
-        field_types = [TimestampType(), DoubleType(), DoubleType(), DoubleType(), DoubleType(), StringType(),
-                       StringType()]
+        fields = ['time', 'stock_code', 'price', 'change', 'volume', 'amount', 'type']
+        field_types = [TimestampType(), DoubleType(), DoubleType(), DoubleType(), DoubleType(), DoubleType(),
+                       DoubleType()]
         sfields = []
         for f, t in zip(fields, field_types):
             sfields.append(StructField(f, t, True))
