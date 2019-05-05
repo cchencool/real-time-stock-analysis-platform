@@ -22,6 +22,7 @@ from pyspark.sql.window import Window
 import os
 import sys
 import random
+import builtins
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -57,7 +58,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
         # window width is twice as the batchInterval where each interval slide only 1 time of the batchInterval
         dataStream = data.window(batchInterval * 3, batchInterval)
         dataStream = dataStream.transform(lambda time, rdd: self.transformer(time, rdd))
-        dataStream.pprint()
+        # dataStream.pprint()
         kmeanSchema = DataVO.get_schema()
 
         # cluster number
@@ -78,7 +79,8 @@ class ClusterRegressionProcessor(StreamingProcessor):
 
         ## clustering
         # for now is features except (time, stock_code):  (len(kmeanSchema.names) - 2)
-        orgfeature_count = len(kmeanSchema.names) - 2
+        # orgfeature_count = len(kmeanSchema.names) - 2
+        orgfeature_count = 3 - 2
         # here dim may change due the different feature Engineering;
         #   then shift (batchInterval-1) times, combine with current value: *batchInterval
         #   and another one future price: + 1
@@ -87,6 +89,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
         # train & pred on streams get kmean_result: dstream ==> (label, clusterID)
         model.trainOn(trainS)
         kmean_result = model.predictOnValues(predS)
+        # print(model.latestModel.centers)
         # the kmean_result will be like same label have multiple clusters, which each row belongs to 1 timepoint.
         # therefore, requring a groupby to eliminate the duplicated labels (stock_code).
         # using mode as cluster for the stock; require scipy.stats
@@ -144,7 +147,7 @@ class ClusterRegressionProcessor(StreamingProcessor):
             #clsstream = branch(rdatastream, cls).cache()
             # clsstream = clsstream
             cls_streams[cls] = branch(rdatastream, cls)#.cache() #clsstream
-            cls_streams[cls].pprint()
+            # cls_streams[cls].pprint()
 
         ## do regression
         # features exclude colume 'cluster_id', 'time', 'stock_code', 'lead1-Y'
@@ -156,21 +159,24 @@ class ClusterRegressionProcessor(StreamingProcessor):
         for cls in range(numClusters):
             cls_train_stream[cls] = MDLUtils.rparse_train(cls_streams[cls])
             cls_pred_stream[cls] = MDLUtils.rparse_pred(cls_streams[cls])
-            # cls_train_stream[cls].pprint()
-            # cls_pred_stream[cls].pprint()
+            cls_train_stream[cls].pprint()
+            cls_pred_stream[cls].pprint()
 
             '''
             FIXME: for Demo
             '''
-            # # reg model
-            # cls_reg_models[cls] = MDLUtils.make_reg_model(cls_train_stream[cls], numFeatures=num_reg_features)
-            # # cls_reg_models[cls].predictOn(cls_pred_stream[cls].map(lambda lp: lp.features))
-            # cls_reg_prediction[cls] = cls_reg_models[cls].predictOnValues(cls_pred_stream[cls])
-            # # valstream
-            # # cls_reg_prediction[cls].pprint()
-            import builtins
-            cls_reg_prediction[cls] = cls_train_stream[cls]\
-                .map(lambda v: (-1, builtins.round(v.label + random.randrange(-5, 5)*0.1*v.label, 2)))
+            # reg model
+            if cls not in cls_reg_models.keys():
+                cls_reg_models[cls] = MDLUtils.make_reg_model(numFeatures=num_reg_features)
+            cls_reg_models[cls].trainOn(cls_train_stream[cls])
+            # cls_reg_models[cls].predictOn(cls_pred_stream[cls].map(lambda lp: lp.features))
+            # print(f"intercept: {cls_reg_models[cls].latestModel.intercept}, weights: {cls_reg_models[cls].latestModel.weights}")
+
+            cls_reg_prediction[cls] = cls_reg_models[cls].predictOnValues(cls_pred_stream[cls])
+            # valstream
+            cls_reg_prediction[cls].pprint()
+            # cls_reg_prediction[cls] = cls_train_stream[cls]\
+            #     .map(lambda v: (-1, builtins.round(v.label + random.randrange(-5, 5)*0.1*v.label, 2)))
 
             self.encapsulate_result(cls, real_stream=cls_streams[cls], pred_val_stream=cls_reg_prediction[cls])
         return
@@ -221,6 +227,8 @@ class ClusterRegressionProcessor(StreamingProcessor):
         # (time, pred_price)
         data = rdd.collect()
         for time, val in data:
+            if np.isnan(val): #np.nan:
+                val = -0.5
             data_dic = cls_dic.get(time, dict())
             data_dic.update({'pred':val})
             cls_dic.update({time: data_dic})
@@ -265,6 +273,84 @@ class ClusterRegressionProcessor(StreamingProcessor):
 
 class MDLUtils(object):
 
+    # @staticmethod
+    # def cluster_feature_builder(time, rdd, schema, shift_count=2):
+    #     # 1. aggregation
+    #     # print((rdd.take(5)))
+    #
+    #     df = rdd.toDF(schema=schema)
+    #     df = df.groupBy(col('time'), col('stock_code')) \
+    #         .avg('price', 'change', 'volume', 'amount', 'type') \
+    #         .select(col('time'), col('stock_code'),
+    #                 bround('avg(price)', 2).alias('price'),
+    #                 bround('avg(change)', 2).alias('change'),
+    #                 bround('avg(volume)', 2).alias('volume'),
+    #                 bround('avg(amount)', 2).alias('amount'),
+    #                 bround('avg(type)', 2).alias('type')) \
+    #         .orderBy(col('stock_code'), col('time'), ascending=[1, 1])
+    #
+    #     new_cols = []
+    #     new_cols.extend(schema.names)
+    #
+    #     # try:
+    #     #     # 2.1 mutiply features:bsn
+    #     #     df = df.withColumn("bsn", df.volume * df.amount * df.type)
+    #     #     # 2.2 MinMaxScaler
+    #     #     for i in ['amount', 'volume', 'bsn']:
+    #     #         vecAssembler = VectorAssembler(inputCols=[i], outputCol=i + "_new")
+    #     #         mmScaler = MinMaxScaler(inputCol=i + "_new", outputCol='mm_' + i)
+    #     #         pipeline = Pipeline(stages=[vecAssembler, mmScaler])
+    #     #         pipeline_fit = pipeline.fit(df)
+    #     #         df = pipeline_fit.transform(df)
+    #     #
+    #     #
+    #     #     # 多了 amount_new, volume_new, bsn_new 和 mm_amount, mm_volume, mm_bsn 这些列
+    #     #     # drop掉 amount_new, volume_new, bsn_new 和 amount, volume, bsn 这些列
+    #     #     df = df.drop('amount_new', 'volume_new', 'bsn_new', 'amount', 'volume', 'bsn')
+    #     #
+    #     #     # 重命名 mm_ 列
+    #     #     # df = df.withColumnRenamed("mm_amount", "amount")
+    #     #     # df = df.withColumnRenamed("mm_volume", "volume")
+    #     #     # df = df.withColumnRenamed("mm_bsn", "bsn")
+    #     #     df = df.withColumn("amount", split(col("mm_amount", ",")).getItem(0))
+    #     #     df = df.withColumn("volume", split(col("mm_volume", ",")).getItem(0))
+    #     #     df = df.withColumn("bsn", split(col("mm_bsn", ",")).getItem(0))
+    #     #
+    #     #     df = df.drop('mm_amount', 'mm_volume', 'mm_bsn')
+    #     #
+    #     #     # 2.3 shift features
+    #     #     new_cols.append('bsn')
+    #     #
+    #     # except Exception as e:
+    #     #         print(e)
+    #
+    #     # 2. shift features
+    #     Y_COL_NAME = 'lead1-Y'
+    #     w = Window.partitionBy("stock_code").orderBy('time')  # .rangeBetween(3, 1)
+    #     lead1_Y = lead(col('price'), count=1).over(w)
+    #     df_fe = df.withColumn(Y_COL_NAME, lead1_Y)
+    #     for i in range(shift_count):  # 2): # shiftting time span, better to be the batchInterval-1
+    #         df_fe = MDLUtils.append_lags(df_fe, new_cols, w, i + 1)
+    #     df_fe = df_fe.orderBy(col('stock_code'), col('time'), ascending=[1, 1])
+    #
+    #     # 3. move lable column Y (lead1-Y) to the last column
+    #     cols = df_fe.columns
+    #     cols.remove(Y_COL_NAME)
+    #     cols.append(Y_COL_NAME)
+    #     df_fe = df_fe.select(cols)
+    #     # df_fe.show()
+    #
+    #     # 4. transback to rdd
+    #     rdd_out = df_fe.rdd.map(MDLUtils.map_df_to_rdd)
+    #
+    #     # # 5. drop rows with None feature values after shift. Except for lead-Y, which is the last col of the rdd
+    #     # rdd_out = rdd_out.filter(lambda v: None not in v[:-1])
+    #
+    #     # 6. drop time column, which is the first column.
+    #     #     rdd_out = rdd_out.map(lambda v: v[1:])
+    #
+    #     return rdd_out
+
     @staticmethod
     def cluster_feature_builder(time, rdd, schema, shift_count=2):
         # 1. aggregation
@@ -272,49 +358,13 @@ class MDLUtils(object):
 
         df = rdd.toDF(schema=schema)
         df = df.groupBy(col('time'), col('stock_code')) \
-            .avg('price', 'change', 'volume', 'amount', 'type') \
+            .avg('price')\
             .select(col('time'), col('stock_code'),
-                    bround('avg(price)', 2).alias('price'),
-                    bround('avg(change)', 2).alias('change'),
-                    bround('avg(volume)', 2).alias('volume'),
-                    bround('avg(amount)', 2).alias('amount'),
-                    bround('avg(type)', 2).alias('type')) \
+                    bround('avg(price)', 2).alias('price'))\
             .orderBy(col('stock_code'), col('time'), ascending=[1, 1])
 
         new_cols = []
-        new_cols.extend(schema.names)
-
-        # try:
-        #     # 2.1 mutiply features:bsn
-        #     df = df.withColumn("bsn", df.volume * df.amount * df.type)
-        #     # 2.2 MinMaxScaler
-        #     for i in ['amount', 'volume', 'bsn']:
-        #         vecAssembler = VectorAssembler(inputCols=[i], outputCol=i + "_new")
-        #         mmScaler = MinMaxScaler(inputCol=i + "_new", outputCol='mm_' + i)
-        #         pipeline = Pipeline(stages=[vecAssembler, mmScaler])
-        #         pipeline_fit = pipeline.fit(df)
-        #         df = pipeline_fit.transform(df)
-        #
-        #
-        #     # 多了 amount_new, volume_new, bsn_new 和 mm_amount, mm_volume, mm_bsn 这些列
-        #     # drop掉 amount_new, volume_new, bsn_new 和 amount, volume, bsn 这些列
-        #     df = df.drop('amount_new', 'volume_new', 'bsn_new', 'amount', 'volume', 'bsn')
-        #
-        #     # 重命名 mm_ 列
-        #     # df = df.withColumnRenamed("mm_amount", "amount")
-        #     # df = df.withColumnRenamed("mm_volume", "volume")
-        #     # df = df.withColumnRenamed("mm_bsn", "bsn")
-        #     df = df.withColumn("amount", split(col("mm_amount", ",")).getItem(0))
-        #     df = df.withColumn("volume", split(col("mm_volume", ",")).getItem(0))
-        #     df = df.withColumn("bsn", split(col("mm_bsn", ",")).getItem(0))
-        #
-        #     df = df.drop('mm_amount', 'mm_volume', 'mm_bsn')
-        #
-        #     # 2.3 shift features
-        #     new_cols.append('bsn')
-        #
-        # except Exception as e:
-        #         print(e)
+        new_cols.append('price')
 
         # 2. shift features
         Y_COL_NAME = 'lead1-Y'
@@ -330,7 +380,7 @@ class MDLUtils(object):
         cols.remove(Y_COL_NAME)
         cols.append(Y_COL_NAME)
         df_fe = df_fe.select(cols)
-        # df_fe.show()
+        df_fe.show()
 
         # 4. transback to rdd
         rdd_out = df_fe.rdd.map(MDLUtils.map_df_to_rdd)
@@ -352,6 +402,40 @@ class MDLUtils(object):
             df_fe = df_fe.withColumn(f"{c}-lag{i}", lag(col(c), count=i).over(w))
         return df_fe
 
+    # @staticmethod
+    # def get_shifted_schema(orgfeature_count, shift_count, orgschema=DataVO.get_schema()):
+    #     rfields = []
+    #     rfield_types = []
+    #     rfields.append('cluster_id')
+    #     rfield_types.append(DoubleType())
+    #     # ['time', 'stock_code',
+    #     #  'price', 'change', 'volume', 'amount', 'type']
+    #     # rfields.extend(orgschema.names)
+    #     # [DoubleType(), TimestampType(), DoubleType(),
+    #     #  DoubleType(), DoubleType(), DoubleType(), DoubleType(), DoubleType()]
+    #     # rfield_types.extend(orgschema.fields)
+    #     for field in orgschema.fields:
+    #         rfields.append(field.name)
+    #         rfield_types.append(field.dataType)
+    #
+    #     for i in range(shift_count):
+    #         for j in range(orgfeature_count):
+    #             # 'price-lag1', 'change-lag1', 'volume-lag1', 'amount-lag1', 'type-lag1',
+    #             feature = orgschema.fields[j - orgfeature_count].name # iter: ... -5, -4, -3, -2, -1
+    #             # DoubleType(), DoubleType(), DoubleType(), DoubleType(), DoubleType(),
+    #             feature_type = orgschema.fields[j - orgfeature_count].dataType  # iter: ... -5, -4, -3, -2, -1
+    #             rfields.append(f'{feature }-lag{i+1}')
+    #             rfield_types.append(feature_type)
+    #
+    #     rfields.append('lead1-Y')
+    #     rfield_types.append(DoubleType())
+    #
+    #     rFields = []
+    #     for f, t in zip(rfields, rfield_types):
+    #         rFields.append(StructField(f, t, True))
+    #     schema = StructType(rFields)
+    #     return schema
+
     @staticmethod
     def get_shifted_schema(orgfeature_count, shift_count, orgschema=DataVO.get_schema()):
         rfields = []
@@ -359,23 +443,21 @@ class MDLUtils(object):
         rfields.append('cluster_id')
         rfield_types.append(DoubleType())
         # ['time', 'stock_code',
-        #  'price', 'change', 'volume', 'amount', 'type']
-        # rfields.extend(orgschema.names)
+        #  'price']
         # [DoubleType(), TimestampType(), DoubleType(),
-        #  DoubleType(), DoubleType(), DoubleType(), DoubleType(), DoubleType()]
-        # rfield_types.extend(orgschema.fields)
+        #  DoubleType()]
         for field in orgschema.fields:
-            rfields.append(field.name)
-            rfield_types.append(field.dataType)
+            if field.name in ['time', 'stock_code', 'price']:
+                rfields.append(field.name)
+                rfield_types.append(field.dataType)
 
         for i in range(shift_count):
-            for j in range(orgfeature_count):
-                # 'price-lag1', 'change-lag1', 'volume-lag1', 'amount-lag1', 'type-lag1',
-                feature = orgschema.fields[j - orgfeature_count].name # iter: ... -5, -4, -3, -2, -1
-                # DoubleType(), DoubleType(), DoubleType(), DoubleType(), DoubleType(),
-                feature_type = orgschema.fields[j - orgfeature_count].dataType  # iter: ... -5, -4, -3, -2, -1
-                rfields.append(f'{feature }-lag{i+1}')
-                rfield_types.append(feature_type)
+            # 'price-lag1'
+            feature = 'price'
+            # DoubleType()
+            feature_type = DoubleType()
+            rfields.append(f'{feature}-lag{i + 1}')
+            rfield_types.append(feature_type)
 
         rfields.append('lead1-Y')
         rfield_types.append(DoubleType())
@@ -386,12 +468,12 @@ class MDLUtils(object):
         schema = StructType(rFields)
         return schema
 
+
     @staticmethod
-    def make_reg_model(stream, numFeatures):
+    def make_reg_model(numFeatures):
         # inital streaming linear regression model
-        mdl = StreamingLinearRegressionWithSGD();
-        mdl.setInitialWeights(np.zeros(numFeatures).tolist())
-        mdl.trainOn(stream)
+        mdl = StreamingLinearRegressionWithSGD(stepSize=0.001, numIterations=10);
+        mdl.setInitialWeights(np.ones(numFeatures).tolist())
         return mdl
 
     @staticmethod
@@ -426,7 +508,7 @@ class MDLUtils(object):
                 .avg(*avg_cols) \
                 .select(*slt_cols) \
                 .orderBy(*order_by, ascending=ascending)
-            # df.show()
+            df.show()
             rdd_out = df.rdd.map(MDLUtils.map_df_to_rdd)
             return rdd_out
         except Exception as e:
@@ -482,5 +564,5 @@ class MDLUtils(object):
     def rparse_train(stream):
         # rows with labels are the rows to train
         # return stream.map(lambda v:v[1]).filter(lambda v: v.label != -1)
-        return stream.map(lambda v:v[1]).filter(lambda v: v.label > 0)
+        return stream.map(lambda v:v[1]).filter(lambda v: v.label > 0 and True not in np.isnan(v.features))
 
