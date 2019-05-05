@@ -165,8 +165,9 @@ class ClusterRegressionProcessor(StreamingProcessor):
             # cls_reg_prediction[cls] = cls_reg_models[cls].predictOnValues(cls_pred_stream[cls])
             # # valstream
             # # cls_reg_prediction[cls].pprint()
+            import builtins
             cls_reg_prediction[cls] = cls_train_stream[cls]\
-                .map(lambda v: (-1, round(v.label + random.randrange(-5, 5)*0.1*v.label, 2)))
+                .map(lambda v: (-1, builtins.round(v.label + random.randrange(-5, 5)*0.1*v.label, 2)))
 
             self.encapsulate_result(cls, real_stream=cls_streams[cls], pred_val_stream=cls_reg_prediction[cls])
         return
