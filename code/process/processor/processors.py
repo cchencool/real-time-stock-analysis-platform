@@ -28,7 +28,7 @@ from database.dbaccess import DataAccess
 
 __all__ = ['BaseProcessor', 'ProcessorResult',
            'ModelingProcessor', 'StreamModelProcessor', 'BatchModelProcessor',
-           'StockAvgProcessor', 'DBStoreProcessor']
+           'StockAvgProcessor', 'ModelInferenceProcessor', 'DBStoreProcessor']
 
 
 class ProcessorResult(object):
@@ -36,7 +36,7 @@ class ProcessorResult(object):
     def __init__(self):
         self.result_str = ''
         self.result_list = []
-        self.result_dict = []
+        self.result_dict = {}
         self.inference_result = None
 
 
@@ -46,14 +46,14 @@ class BaseProcessor(SparkResource):
     Some processor can implement as stateful computation
     Should be applied in single process, because the only one spark-session can running in one JVM
     """
-    def __init__(self, schema:StructType, master='local[2]', app_name='baseProcessor'):
+    def __init__(self, schema:StructType, master='local[2]', app_name='baseProcessor', *args, **kwargs):
         super().__init__()
         self.schema = schema
         self.ss = None
         self.sc = None
         self.master = master
         self.app_name = app_name
-        self.run_result = ProcessorResult()
+        self.run_result = dict()#ProcessorResult()
         self.socket_host = None
         self.socket_port = None
         self.ssc_batchDuration = None
@@ -64,140 +64,168 @@ class BaseProcessor(SparkResource):
         :param kwargs:
         :return:
         """
-        self.base_config(master=self.master, app_name=self.app_name)
+        self.base_config(master=self.master, app_name=self.app_name).config()
         super().build_context()
         self.ss : SparkSession = super().get_spark_session()
         self.sc : SparkContext = super().get_spark_context()
 
-    def handle_stream(self, dstream: DStream):
+    def transformer(self, data):
+        """
+        transform before handle
+        :param data:
+        :return:
+        """
+        raise NotImplementedError
+
+    def handle(self, data):
         """
         Stream Handler
-        :param dstream: input dstream
+        :param data: input dstream
         :return: None
         """
-        try:
-            dstream = self.format(dstream=dstream)
-            # process rdds of each batch
-            dstream.foreachRDD(self.processor)
-        except Exception as e:
-            logging.error(e)
-            print(e)
-            return
+        raise NotImplementedError
 
-    def format(self, dstream: DStream) -> DStream:
+
+class StreamingProcessor(BaseProcessor):
+
+    def transformer(self, time, rdd: t_rdd) -> t_rdd:
         """
         Transform the DStream to required structure.
         :param dstream: input dstream
         :return: transformed dstream
         """
+        # print(f"first transform {time}")
         # ['----'] -> ['-','-','-']
-        lines = dstream.flatMap(lambda lines: lines.split('\n'))
+        lines = rdd.flatMap(lambda lines: lines.split('\n'))
         # lines.map(lambda line: line.split(',')).map(lambda rec: str(DataVO.ecapsulate(rec))).pprint()
         # ['-', '-', '-'] -> [ ['f', 'f', 'f'], ['f', 'f', 'f'],... ]
         field_lines = lines.map(lambda line: line.split(','))
         # TODO re-implement cast_type function. do this based on self.schema object
         # cast string to column schema
         def cast_types(line: list) -> list:
+            formant = '%Y-%m-%d %H:%M:%S'
             try:
-                l = [dt.strptime(line[0], '%Y-%m-%d %X'), float(line[1]), float(line[2]), float(line[3]), float(line[4]), line[5], line[6]]
+                l = [dt.strptime(line[0], formant), float(line[1]), float(line[2]), float(line[3]), float(line[4]), float(line[5]), float(line[6])]
             except ValueError as e:
-                l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, '-1', '-1']
+                l = [dt(2000, 1, 1, 0, 0, 0), -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
             return l
         field_lines_casted = field_lines.map(cast_types)
         return field_lines_casted
 
-    def processor(self, time, rdd: t_rdd) -> ProcessorResult:
+    def handle(self, data: DStream):
         """
-        process program foreach rdd in DStream object.
-        This part should also handle the run_result object if necessary.
-        :param time:
-        :param rdd:
-        :return:
+        Stream Handler
+        :param data: input dstream
+        :return: None
         """
-        raise NotImplementedError
+        try:
+            data = data.transform(self.transformer)
+            # process rdds of each batch
+        except Exception as e:
+            logging.error(e)
+            print(e)
+
+        return data
 
 
 class ModelingProcessor(BaseProcessor):
 
-    def __init__(self, schema:StructType, mdls=None, algo=None, master='local[2]', app_name='baseProcessor'):
+    def __init__(self, schema:StructType, algo=None, master='local[2]', app_name='baseProcessor', *args, **kwargs):
         """
         Base class for modeling processors
         :param schema: data schema
-        :param mdls: modeling service, mdls & algo should both be None or not.
         :param algo: model algorithm
         :param master: spark master host
         :param app_name: app name
         """
         super().__init__(self, schema=schema, master=master, app_name=app_name)
         self.algo = algo
-        self.mdls = mdls
         self.model = None
 
-    def processor(self, time, rdd:t_rdd=None, df:DataFrame=None) -> ProcessorResult:
-        """
-        oltp will pass rdd; olap will pass dataFrame by the framework
-        :param time:
-        :param rdd:
-        :param df:
-        :return:
-        """
-        if not df and rdd:
-            df = rdd.toDF(schema=self.schema)
-        self.model = self.modeling(df=df)
-        result = self.inference(df=df)
+    def handle(self, data):
+        data = data.transform(lambda time, rdd: self.transformer(time, rdd))
+        self.model = self.modeling(data=data)
+        result = self.inference(data=data)
         self.run_result = self.encapsulate_inference_result(result)
 
-    def modeling(self, df):
+    def modeling(self, data):
         """
         if modeling service is not passed when init. using self-defined modeling func
         should include special feature engineering if needed
-        :param df: the data is for both modeling and inference. (regression / clustering) for next n period
+        :param dstream: the data is for both modeling and inference. (regression / clustering) for next n period
         :return:
         """
         raise NotImplementedError
 
-    def inference(self, df):
+    def inference(self, data):
         """
         if modeling service is not passed when init. using self-defined inference func
-        :param df:
+        :param dstream:
         :return:
         """
         raise NotImplementedError
 
     def encapsulate_inference_result(self, inference_result) -> ProcessorResult:
         """
-        encapsulate inference result object returned by spark to system recognized format.
+        encapsulate inference result object returned by spark to system recognized transform.
         :param inference_result:
         :return:
         """
         raise NotImplementedError
 
 
-class StreamModelProcessor(ModelingProcessor):
+class StreamModelProcessor(StreamingProcessor, ModelingProcessor):
 
-    def processor(self, time, rdd:t_rdd) -> ProcessorResult:
-        return super().processor(time=time, rdd=rdd)
+    # def transform(self, data: DStream) -> DStream:
+    #     raise NotImplementedError
+
+    def modeling(self, data: DStream) -> DStream:
+        raise NotImplementedError
+
+    def inference(self, data: DStream) -> DStream:
+        raise NotImplementedError
 
 
 class BatchModelProcessor(ModelingProcessor):
 
-   def processor(self, time, df:DataFrame) -> ProcessorResult:
-       return super().processor(time=time, df=df)
+    def transformer(self, data: t_rdd) -> t_rdd:
+        raise NotImplementedError
+
+    def modeling(self, data: DataFrame) -> DataFrame:
+        raise NotImplementedError
+
+    def inference(self, data: DataFrame) -> DStream:
+        raise NotImplementedError
 
 
 ############################### classes above are all base class ####################################
 
 
 # demo
-class StockAvgProcessor(BaseProcessor):
+class StockAvgProcessor(StreamingProcessor):
     """
     sample process: get the mean price of stock with volume larger than 150.
     you can call model_building_service here
     """
-    # def format(self, dstream: DStream) -> DStream:
+    # def transform(self, dstream: DStream) -> DStream:
     def build_context(self, **kwargs):
         self.config(spark_cores_max = '2');
         super().build_context()
+
+    def handle(self, data: DStream):
+        """
+        Stream Handler
+        :param data: input dstream
+        :return: None
+        """
+        try:
+            dataStream = data.transform(lambda time, rdd: self.transformer(time, rdd))
+            # process rdds of each batch
+            dataStream.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
 
     def processor(self, time, rdd:t_rdd):
         try :
@@ -213,7 +241,7 @@ class StockAvgProcessor(BaseProcessor):
                 .mean('price') \
                 .withColumnRenamed('avg(price)', 'mean_price')
             result.show()
-            self.run_result.result_str = time
+            self.run_result.update({time: 'success'})#.result_str = time
         except Exception as e:
             # TODO
             #   if error found. stop processor
@@ -224,18 +252,44 @@ class StockAvgProcessor(BaseProcessor):
 
 
 '''
+Author: cchen
+'''
+class ModelInferenceProcessor(StreamModelProcessor):
+    """
+    TODO using batch model to do inference on the stream data
+    """
+    pass
+
+
+'''
 Author: Dojo
 '''
-class DBStoreProcessor(BaseProcessor):
+class DBStoreProcessor(StreamingProcessor):
     """
     Connect to the MongoDB
     """
-    # def format(self, dstream: DStream) -> DStream:
+    # def transform(self, dstream: DStream) -> DStream:
     def build_context(self, **kwargs):
         self.config(spark_mongodb_input_uri="mongodb://127.0.0.1/5003.stocks",
                     spark_mongodb_output_uri="mongodb://127.0.0.1/5003.stocks",
                     spark_jars_packages="org.mongodb.spark:mongo-spark-connector_2.11:2.4.0")
         super().build_context()
+
+    def handle(self, data: DStream):
+
+        """
+        Stream Handler
+        :param data: input dstream
+        :return: None
+        """
+        try:
+            dataStream = data.transform(lambda time, rdd: self.transformer(time, rdd))
+            # process rdds of each batch
+            dataStream.foreachRDD(self.processor)
+        except Exception as e:
+            logging.error(e)
+            print(e)
+            return
 
     def processor(self, time, rdd):
         # Store data
@@ -251,13 +305,13 @@ class DBStoreProcessor(BaseProcessor):
         # print(df)
         #
         # # Run SQL
-        # sql = 'select * from {} where type > 0'.format(coll)
+        # sql = 'select * from {} where type > 0'.transform(coll)
         # sparkDF_sql = dao.run_sql(sql, db, coll)
         # df_sql = sparkDF_sql.collect()
         # print(df_sql)
 
 
-if __name__ == '__main__':
-    dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
-    dbsp.build()
-    dbsp.processor(time='', rdd='')
+# if __name__ == '__main__':
+#     dbsp = DBStoreProcessor(schema=None, master='spark://zhengdongjiadeMacBook-Pro.local:7077', app_name='test_db_store')
+#     dbsp.build()
+#     dbsp.processor(time='', rdd='')

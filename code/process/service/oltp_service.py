@@ -10,7 +10,10 @@ from pyspark.streaming import StreamingContext, DStream
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
 from pyspark.sql.functions import *
+from pyspark.streaming.listener import StreamingListener
 
+from os.path import join as pjoin
+from datetime import datetime as dt
 from pojo.datavo import DataVO
 from utils.sparkresource import SparkResource
 from utils.processenum import ProcessStatus, ProcessCommand
@@ -44,7 +47,10 @@ class OLTPProcess(BaseTaskProcess):
                 self.pip_conn.send((self.status, self.sps.run_result))
                 break
             elif cmd == ProcessCommand.GET_CURR_RESULT:
-                self.pip_conn.send((self.status, self.sps.run_result))
+                # import copy
+                # incr_dic = copy.copy(self.sps.run_result)
+                # self.sps.run_result.clear()
+                self.pip_conn.send((self.status, self.sps.run_result))#incr_dic))
             # elif finished normally:
             #     if self.status == ProcessStatus.RUNING:
             #         self.status = ProcessStatus.FINISHED
@@ -53,13 +59,27 @@ class OLTPProcess(BaseTaskProcess):
         try:
             self.sps.build_context()
             ssc = self.sps.get_spark_stream_context(batchDuration=self.batchDuration)
+
             # setup spark-sessions
             # Create a DStream that will connect to hostname:port, like localhost:9999
             dstream = ssc.socketTextStream("localhost", self.stream_port)
 
             # handle stream data
-            self.sps.handle_stream(dstream=dstream)
+            self.sps.handle(data=dstream)
 
+            # def batchComplete():
+            #     import os
+            #     from os.path import join as pjoin
+            #     log_dir = os.environ['MSBD5003_PRJ_LOG_PATH']
+            #     with open(pjoin(log_dir, 'signal'), 'r') as f:
+            #         l = f.readline()
+            #         if l == 'sendComplete':
+            #             with open(pjoin(log_dir, 'signal'), 'w+') as f:
+            #                 f.write('batchComplete')
+            #
+            # sl = StreamingListener()
+            # sl.onBatchCompleted(batchComplete)
+            # ssc.addStreamingListener(sl)
             # Start the computation
             ssc.start()
             self.status = ProcessStatus.RUNING

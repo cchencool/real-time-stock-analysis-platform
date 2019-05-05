@@ -19,7 +19,7 @@ class DataAccess(object):
         """
         uri = "mongodb://127.0.0.1/{}.{}".format(db, coll)
         try:
-            df = self.sparkSession.read.format("com.mongodb.spark.sql.DefaultSource"). \
+            df = self.sparkSession.read.transform("com.mongodb.spark.sql.DefaultSource"). \
                 option("uri", uri). \
                 load()
             df.createOrReplaceTempView(coll)    # Notice that the table name is equal to 'coll'
@@ -42,7 +42,7 @@ class DataAccess(object):
         """
         uri = "mongodb://127.0.0.1/{}.{}".format(db, coll)
         try:
-            df = self.sparkSession.read.format("com.mongodb.spark.sql.DefaultSource"). \
+            df = self.sparkSession.read.transform("com.mongodb.spark.sql.DefaultSource"). \
             option("uri", uri). \
             load()
             result = df.collect()
@@ -64,7 +64,7 @@ class DataAccess(object):
         """
         try:
             df = self.sparkSession.createDataFrame(rdd, schema)
-            df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
+            df.write.transform("com.mongodb.spark.sql.DefaultSource").mode("append").save()
         except:
             print("Store data process failed!")
             return False

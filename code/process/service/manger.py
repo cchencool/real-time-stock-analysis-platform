@@ -19,7 +19,7 @@ from pojo.datavo import DataVO
 from utils.processenum import ProcessStatus
 from utils.moduletools import reflect_inst, castparam
 from processor.processors import BaseProcessor
-
+from pyspark.streaming.listener import StreamingListener
 from multiprocessing import Process, Pipe
 from threading import Lock
 
@@ -48,7 +48,7 @@ class TaskManger(object):
     def set_stream_port(self, port=5003):
         self.stream_port = port
 
-    def add_task(self, classname:str, type:str):
+    def add_task(self, classname:str, type:str, **kwargs):
         global counter, counter_locker
         # TODO
         #  1. Add process management. process pool
@@ -56,20 +56,11 @@ class TaskManger(object):
         counter_locker.acquire()
         counter += 1
         counter_locker.release()
-        pid = None
         data = None
         # check processor/task cache to determine whether start a new one
-        if classname in self.processor_to_pid:
-            cache_locker.acquire()
-            pid = self.processor_to_pid[classname]
-            p, conn = self.process_dict[pid]
-            cache_locker.release()
-            p:Process
-            if p.is_alive():
-                logging.info(f"find cache process for {classname}, pid: {pid}")
-            else:
-                self.terminate_process(pid)
-                pid = None
+        pid = self._check_processor_pid(processor=classname)
+        algo_param = kwargs.get('algo_param', dict()) # algo_param for processor params.
+        algo_param.update({"batchDuration":10})
         # no cache, or process is already dead.
         if pid is None:
             from .oltp_service import OLTPProcess
@@ -83,7 +74,7 @@ class TaskManger(object):
             else:
                 raise ValueError(f"processor type should be either OLAP or OLTP! {type} was given")
 
-            p = clz(classname, child_conn, master=self.master, stream_port=self.stream_port)
+            p = clz(classname, child_conn, master=self.master, stream_port=self.stream_port, algo_param=algo_param)
             try:
                 p.start()
                 pstatus = parent_conn.recv()
@@ -108,9 +99,39 @@ class TaskManger(object):
                     data = p.sps.run_result
         return pid, data
 
+
+    def _check_processor_pid(self, pid=None, processor=None):
+        p = None
+        cache_locker.acquire()
+        if pid is not None and pid in self.process_dict:
+            p, conn = self.process_dict[pid]
+            processor = self.pid_to_processor[pid]
+        elif processor is not None and processor in self.processor_to_pid:
+            pid = self.processor_to_pid[processor]
+            p, conn = self.process_dict[pid]
+        cache_locker.release()
+        if p is not None:
+            p: Process
+            if p.is_alive():
+                logging.info(f"find cache process for {processor}, pid: {pid}")
+            else:
+                logging.info(f"find dead process for {processor}, pid: {pid}")
+                self.terminate_process(pid=pid, pname=processor)
+        return pid
+
+    def _get_pid_by_processor(self, pname):
+        cache_locker.acquire()
+        pid = self.processor_to_pid.get(pname, -1)
+        cache_locker.release()
+        return pid
+
     @castparam({'pid':int})
-    def terminate_process(self, pid):
-        result = "pid not found"
+    def terminate_process(self, pid, pname):
+        result = ProcessStatus.FAILED
+        if pid is None and pname is not None:
+            pid = self._get_pid_by_processor(pname)
+            if pid == -1:
+                return ProcessStatus.FAILED
         cache_locker.acquire()
         if pid in self.process_dict:
             p, conn = self.process_dict.pop(pid)
@@ -121,22 +142,30 @@ class TaskManger(object):
                 p.terminate()
             except Exception as e:
                 pass
-            result = "success"
+            result = ProcessStatus.SUCCESS
         else:
             cache_locker.release()
         return result
 
     @castparam({'pid':int})
-    def communicate(self, pid, cmd):
+    def communicate(self, pid, pname, cmd):
         status = None
         result = None
+        if pid is not None:
+            self._check_processor_pid(pid=pid)
+        elif pname is not None:
+            pid = self._get_pid_by_processor(pname=pname)
+            if pid == -1:
+                return ProcessStatus.FAILED, None
+        else:
+            return ProcessStatus.FAILED, None
         cache_locker.acquire()
         if pid in self.process_dict:
             p, conn = self.process_dict[pid]
             cache_locker.release()
             conn.send(cmd)
             status, run_result = conn.recv()
-            result = run_result.result_str
+            result = run_result
         else:
             cache_locker.release()
         return status, result
@@ -158,11 +187,14 @@ class BaseTaskProcess(Process):
         self.stream_port = kwargs.get('stream_port', 5003)
         self.batchDuration = kwargs.get('batchDuration', 5)
 
+        algo_param = kwargs.get('algo_param', dict())
+
         # using reflect to create process instance
         self.sps : BaseProcessor = reflect_inst(processor_name,
                                                 schema=DataVO.get_schema(),
                                                 master=self.master,
-                                                app_name=self.app_name)
+                                                app_name=self.app_name,
+                                                **algo_param)
 
     def run(self):
         raise NotImplementedError

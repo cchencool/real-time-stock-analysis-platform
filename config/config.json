@@ -10,6 +10,10 @@
       "classname": "processor.processors.DBStoreProcessor",
       "type": "oltp"
     },
+    "streamclzreg": {
+      "classname": "processor.stream.ClusterRegressionProcessor",
+      "type": "oltp"
+    },
     "stream.regression.linear": {
       "classname": "processor.stream.StreamLinearRegressionProcessor",
       "type": "oltp"

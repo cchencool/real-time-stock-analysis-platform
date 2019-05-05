@@ -5,12 +5,11 @@ import json
 import os
 import logging
 from os.path import join as pjoin
-from flask import Flask, request
+from flask import Flask, request, make_response, jsonify
 
 from utils.processenum import ProcessCommand
 from service.manger import service_manger
 import threading
-
 
 app = Flask(__name__)
 sem = threading.Semaphore()
@@ -38,9 +37,7 @@ RequestHandler
 def hello():
     return "Hello, world!"
 
-
-
-# debug
+# =============== debug start =================
 @app.route("/mongodb")
 def add_mongodb():
     pdemo = 'dbstore'
@@ -48,12 +45,14 @@ def add_mongodb():
     pid, data = service_manger.add_task(**pparam)
     return f'success, pid = {pid}'
 
+
 @app.route("/demo")
 def add_demo_task():
     pdemo = 'demo'
     pparam = aquire_pparam(pdemo)
     pid, data = service_manger.add_task(**pparam)
     return f'success, pid = {pid}'
+# =============== debug end ====================
 
 
 @app.route("/add_task")
@@ -61,27 +60,47 @@ def add_task():
     pname = request.values.get('pname')
     condition = request.values.get('condition', {})
     pparam = aquire_pparam(pname)
-    pparam.update(condition)
-    pid, data = service_manger.add_task(**pparam)
-    # TODO maybe should be sync for OLAP
-    #  for OLAP, return data
-    return f"success, pid = {pid}, data={data}"
+    result = {'status': 'failed', 'data': None}
+    if pparam is not None:
+        pparam.update(condition)
+        pid, data = service_manger.add_task(**pparam, algo_param=condition)
+        # TODO maybe should be sync for OLAP
+        #  for OLAP, return data
+        result.update({'data': {"pid": pid, "result": data}, 'status': 'success'})
+    response = make_response(jsonify(result), 200)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 
 @app.route("/stop_oltp_processor")
 def stop_processor():
-    # pid = int(request.values.get('pid'))
     pid = request.values.get('pid')
-    result = service_manger.terminate_process(pid=pid)
-    return f"pid: {pid}, status: {result}"
+    pname = request.values.get('pname', None)
+    pparam = aquire_pparam(pname)
+    result = {'status':'failed', 'data':None}
+    if pparam is not None:
+        status = service_manger.terminate_process(pid=pid, pname=pparam['classname'])
+        status = status.value if status is not None else 'failed'
+        pid = pid if pid is not None else pname
+        result.update({'data': {"pid": pid}, 'status': status})
+    response = make_response(jsonify(result), 200)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 
 @app.route("/get_curr_oltp_result")
 def get_curr_oltp_result():
-    # pid = int(request.values.get('pid'))
-    pid = request.values.get('pid')
-    result = service_manger.communicate(pid=pid, cmd=ProcessCommand.GET_CURR_RESULT)
-    return f"{result}"
+    pid = request.values.get('pid', None)
+    pname = request.values.get('pname', None)
+    pparam = aquire_pparam(pname)
+    result = {'status':'failed', 'data':None}
+    if pparam is not None:
+        status, data = service_manger.communicate(pid=pid, pname=pparam['classname'], cmd=ProcessCommand.GET_CURR_RESULT)
+        status = status.value if status is not None else 'failed'
+        result.update({'status': status, 'data':{'status': data}})
+    response = make_response(jsonify(result), 200)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 
 @app.route("/reload_cfg")
@@ -91,6 +110,7 @@ def reload_cfg():
     with open('../../config/config.json', 'r', encoding='utf-8') as f:
         config = json.load(f)
     sem.release()
+
 
 def init_server(spark_master_host ='spark://localhost:7077'):
     global config
@@ -107,10 +127,11 @@ def init_server(spark_master_host ='spark://localhost:7077'):
 
 def aquire_pparam(pname:str) -> dict:
     pname_dict = config['pname_dict']
-    assert pname in pname_dict
-    pparam = pname_dict[pname]
-    assert isinstance(pparam, dict)
-    return pparam
+    if pname in pname_dict:
+        pparam = pname_dict[pname]
+        if isinstance(pparam, dict):
+            return pparam
+    return None
 
 
 if __name__ == "__main__":
