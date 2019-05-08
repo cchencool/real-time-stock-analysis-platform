@@ -66,7 +66,7 @@
       </div>
 
       <div class="item5">
-        <button class="big-button" @click.prevent="stop">
+        <button class="big-button" @click="stop">
           <svg-icon icon-class="stop" class-name="card-panel-icon" />
           Stop
         </button>
@@ -203,6 +203,7 @@ export default {
   },
   data() {
     return {
+      monitor: null,
       windowSize: 200,
       stocksData: [],
       // stocksData: [
@@ -257,7 +258,9 @@ export default {
         console.log(data)
         // this.stocksData = data.body.slice(0, 3);
 
-        this.stocksData = []
+        if (data.body.data !== undefined) {
+          this.stocksData = []
+        }
 
         var cluster_idx = 1
         for (var key in data.body.data) {
@@ -299,6 +302,8 @@ export default {
               }
             }
 
+            cluster_data.data.real.pop()
+
             cluster_idx++
 
             this.stocksData.push(cluster_data)
@@ -307,7 +312,7 @@ export default {
       })
     },
     refresh: function() {
-      setInterval(this.get, 500)
+      this.monitor = setInterval(this.get, 5000)
     },
     confirmFunc: function() {
       this.clustersData = this.clustersDataAll.slice(0, this.clustersCount)
@@ -315,12 +320,13 @@ export default {
     start: function() {
       this.$http.get('http://127.0.0.1:5000/add_task?pname=streamclzreg').then(function(data) {
         console.log(data)
-        m = new Map(Object.entries(data))
+        // m = new Map(Object.entries(data))
       })
     },
     stop: function() {
       this.$http.get('http://127.0.0.1:5000/stop_oltp_processor?pname=streamclzreg').then(function(data) {
         console.log(data)
+        clearInterval(this.monitor)
       })
     }
   }

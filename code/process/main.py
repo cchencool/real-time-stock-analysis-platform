@@ -96,6 +96,7 @@ def get_curr_oltp_result():
     pname = request.values.get('pname', None)
     pparam = aquire_pparam(pname)
     result = {'status':'failed', 'data':None}
+    print("call get_result.")
     if pparam is not None:
         status, data = service_manger.communicate(pid=pid, pname=pparam['classname'], cmd=ProcessCommand.GET_CURR_RESULT)
         status = status.value if status is not None else 'failed'
