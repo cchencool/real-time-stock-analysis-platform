@@ -133,16 +133,16 @@ Because this is quite a big system, there are still many problems to solve. For 
 For the data visualization part of this project, we simply develop a dashboard for parameters setting and prediction mornitoring. This platform enable users to interact with the system and have a clear overview of the prediction process.
 
 ### Development Tools
-- [Vue.js](https://cn.vuejs.org/index.html)  
+- [Vue.js](https://cn.vuejs.org/index.html)    
     **Vue** is a progressive Javascript Framework for front-end development. We have chosen this framework because of its approachable feasibility and versatile functionality. It is a light framework and easy to cover up all the requirements. With the help of Vue, we can focus on the components layout and the logistical interaction without any redundant works such as project compiling and packages dependency. While HTML and CSS are used to define components and elements, Javascript will implement any functions to perform network requests, components interaction, data extraction and calculation.
     
-- [ECharts](https://echarts.baidu.com/)
+- [ECharts](https://echarts.baidu.com/)  
    **ECharts** are used to encapsulate the data into graphs in this platform. It can be well combined with **Vue** to present dynamic charts in webpage. There are mainly four kinds of graphs in the dashboard:
    - **Line-Chart**
    - **Radar-Chart**
    - **Pie-Chart**
    - **Bar-Chart**
-- [vue-element-admin](https://github.com/PanJiaChen/vue-element-admin)
+- [vue-element-admin](https://github.com/PanJiaChen/vue-element-admin)  
   This is a production-ready front-end solution for administration interfaces. It is based on Vue and use the UI Toolkit called Element-UI. There are many typical templates for enterprise applications. Its dashboard template is one of the application that we need. It also includes lots of awesome features which help us catch the audience's and users' eyes.
 
 ### Dashboard
@@ -150,7 +150,7 @@ For the data visualization part of this project, we simply develop a dashboard f
 
 The above picture shows the console webpage, which is the main part of our dashboard. It can be divided into the following parts.
 - Parameters Setting
-![parameters](media/parameters.png)
+<img src='docs/parameters.png'>
 
 The drop-down menu is for parameters setting. From the picture above, it can be seen that the number of clusters, the clustering models and the regression models can be chosen respectively. The clustering models include KMeans, DBSCAN, Gaussian Mixture, Power Iteration Clustering and Latent Dirichlet Allocation. The regression models include Linear Regression, Decision Tree, Random Forests and Gradient-Boosted Trees. All of these models have been implemented in Spark and can be invoked directly.
  
