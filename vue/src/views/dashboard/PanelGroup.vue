@@ -24,7 +24,7 @@
           <div class="card-panel-text">
             Clusters
           </div>
-          <count-to :start-val="0" :end-val="5" :duration="3000" class="card-panel-num" />
+          <count-to :start-val="0" :end-val="this.k_panel" :duration="3000" class="card-panel-num" />
         </div>
       </div>
     </el-col>
@@ -64,9 +64,17 @@
 import CountTo from 'vue-count-to'
 
 export default {
+  props: {
+    k_panel: Number
+  },
   components: {
     CountTo
   },
+  // data() {
+  //   return {
+  //     k_num: this.k_panel
+  //   }
+  // },
   methods: {
     handleSetLineChartData(type) {
       this.$emit('handleSetLineChartData', type)

@@ -66,7 +66,7 @@ export default {
         },
         xAxis: [{
           type: 'category',
-          data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+          data: ['Node1', 'Node2', 'Node3', 'Node4', 'Node5'],
           axisTick: {
             alignWithLabel: true
           }
@@ -77,26 +77,31 @@ export default {
             show: false
           }
         }],
+        // legend: {
+        //   left: 'center',
+        //   bottom: '10',
+        //   data: ['Cluster1', 'Cluster2', 'Cluster3']
+        // },
         series: [{
-          name: 'pageA',
+          name: 'Memory',
           type: 'bar',
           stack: 'vistors',
           barWidth: '60%',
-          data: [79, 52, 200, 334, 390, 330, 220],
+          data: [10, 8, 7, 6, 5],
           animationDuration
         }, {
-          name: 'pageB',
+          name: 'CPU',
           type: 'bar',
           stack: 'vistors',
           barWidth: '60%',
-          data: [80, 52, 200, 334, 390, 330, 220],
+          data: [11, 9, 8, 7, 6],
           animationDuration
         }, {
-          name: 'pageC',
+          name: 'GPU',
           type: 'bar',
           stack: 'vistors',
           barWidth: '60%',
-          data: [30, 52, 200, 334, 390, 330, 220],
+          data: [12, 10, 9, 8, 7],
           animationDuration
         }]
       })

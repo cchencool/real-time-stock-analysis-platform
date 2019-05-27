@@ -1,5 +1,5 @@
 <template>
-  <div :class="className" :style="{height:height,width:width}" />
+  <div :class="className" :style="{height:height,width:width}"></div>
 </template>
 
 <script>
@@ -8,6 +8,14 @@ require('echarts/theme/macarons') // echarts theme
 import { debounce } from '@/utils'
 
 export default {
+  watch: {
+    chartData: {
+      deep: true,
+      handler(val) {
+        this.setOptions(val)
+      }
+    }
+  },
   props: {
     className: {
       type: String,
@@ -20,7 +28,12 @@ export default {
     height: {
       type: String,
       default: '300px'
-    }
+    },
+    chartData: Object
+    // k_num: {
+    //   type: Number,
+    //   default: 2
+    // }
   },
   data() {
     return {
@@ -45,9 +58,7 @@ export default {
     this.chart = null
   },
   methods: {
-    initChart() {
-      this.chart = echarts.init(this.$el, 'macarons')
-
+    setOptions({ legend_data, series_data } = {}) {
       this.chart.setOption({
         tooltip: {
           trigger: 'item',
@@ -56,28 +67,32 @@ export default {
         legend: {
           left: 'center',
           bottom: '10',
-          data: ['Cluster1', 'Cluster2', 'Cluster3', 'Cluster4', 'Cluster5']
+          data: legend_data
+          // data: ['Cluster1', 'Cluster2', 'Cluster3', 'Cluster4', 'Cluster5']
         },
         calculable: true,
-        series: [
-          {
-            name: 'WEEKLY WRITE ARTICLES',
-            type: 'pie',
-            roseType: 'radius',
-            radius: [15, 95],
-            center: ['50%', '38%'],
-            data: [
-              { value: 320, name: 'Cluster1' },
-              { value: 240, name: 'Cluster2' },
-              { value: 149, name: 'Cluster3' },
-              { value: 100, name: 'Cluster4' },
-              { value: 59, name: 'Cluster5' }
-            ],
-            animationEasing: 'cubicInOut',
-            animationDuration: 2600
-          }
-        ]
+        series: [{
+          name: 'Cluster Size',
+          type: 'pie',
+          roseType: 'radius',
+          radius: [15, 95],
+          center: ['50%', '38%'],
+          data: series_data,
+          // data: [
+          //   { value: k_num, name: 'Cluster1' },
+          //   { value: k_num, name: 'Cluster2' },
+          //   { value: k_num, name: 'Cluster3' },
+          //   { value: k_num, name: 'Cluster4' },
+          //   { value: k_num, name: 'Cluster5' }
+          // ],
+          animationEasing: 'cubicInOut',
+          animationDuration: 2600
+        }]
       })
+    },
+    initChart() {
+      this.chart = echarts.init(this.$el, 'macarons')
+      this.setOptions(this.chartData)
     }
   }
 }

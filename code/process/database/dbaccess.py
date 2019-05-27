@@ -64,9 +64,10 @@ class DataAccess(object):
         """
         try:
             df = self.sparkSession.createDataFrame(rdd, schema)
-            df.write.transform("com.mongodb.spark.sql.DefaultSource").mode("append").save()
-        except:
+            df.write.format("com.mongodb.spark.sql.DefaultSource").mode("append").save()
+        except Exception as e:
             print("Store data process failed!")
+            print(e)
             return False
         else:
             print("Store data process succeeded!")

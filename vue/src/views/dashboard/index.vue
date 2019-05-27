@@ -4,7 +4,6 @@
     <github-corner class="github-corner" />
 
     <div class="grid-container">
-<!--      <div class="item1"><h3 class="console">Console</h3></div>-->
       <div class="item7">
         <div>
           <img src="./mountain.png" style="width: 100%;">
@@ -18,12 +17,12 @@
           <div class="dropdown">
             <button class="dropbtn">K Clusters &#9662</button>
             <div class="dropdown-content">
-              <a href="#">2</a>
-              <a href="#">4</a>
-              <a href="#">5</a>
-              <a href="#">6</a>
-              <a href="#">8</a>
-              <a href="#">10</a>
+              <a id="2" href="#" @click="updateK(2)">2</a>
+              <a id="4" href="#" @click="updateK(4)">4</a>
+              <a id="5" href="#" @click="updateK(5)">5</a>
+              <a id="6" href="#" @click="updateK(6)">6</a>
+              <a id="8" href="#" @click="updateK(8)">8</a>
+              <a id="10" href="#" @click="updateK(10)">10</a>
             </div>
           </div>
 
@@ -73,35 +72,8 @@
       </div>
     </div>
 
-<!--    <div style="background:#1f2d3d;color: #ffffff;padding:16px 16px 0;margin-bottom:32px;" class="dashboard-text">-->
-<!--      Dashboard-->
-<!--    </div>-->
-
-    <panel-group @handleSetLineChartData="handleSetLineChartData" />
-<!--    <panel-group><panel-group/>-->
-
-<!--    <div>-->
-<!--      <h3 class="console">Console</h3>-->
-
-<!--      <div class="grid-container">-->
-<!--        <div class="item2">Cluster</div>-->
-<!--        <div class="item3">Main</div>-->
-<!--        <div class="item4">Right</div>-->
-<!--        <div class="item5">Footer</div>-->
-<!--      </div>-->
-<!--    </div>-->
-
-
-
-<!--    <div style="background:#fff;padding:16px 16px 16px;margin-bottom:32px;">-->
-<!--      <p>Clusters Number: <input type="text" v-model="clustersCount" /></p>-->
-<!--      <button class="my-button" @click.prevent="confirmFunc">Confirm</button>-->
-<!--    </div>-->
-
-<!--    <div style="background:#fff;padding:16px 16px 16px;margin-bottom:32px;">-->
-<!--      <button class="start-button" @click.prevent="start">Start</button>-->
-<!--      <button class="stop-button" @click.prevent="stop">Stop</button>-->
-<!--    </div>-->
+<!--    <panel-group @handleSetLineChartData="handleSetLineChartData" />-->
+    <panel-group :k_panel="k_num"/>
 
     <el-row :gutter="32">
       <el-col :xs="24" :sm="24" :lg="8">
@@ -111,7 +83,7 @@
       </el-col>
       <el-col :xs="24" :sm="24" :lg="8">
         <div class="chart-wrapper">
-          <pie-chart />
+          <pie-chart :chartData='kmeans_info'/>
         </div>
       </el-col>
       <el-col :xs="24" :sm="24" :lg="8">
@@ -129,31 +101,6 @@
           </el-row>
         </template>
     </div>
-
-<!--    <el-row style="background:#fff;padding:16px 16px 0;margin-bottom:32px;">-->
-<!--      <h2>Cluster 1</h2>-->
-<!--      <button @click="get">Refresh</button>-->
-<!--&lt;!&ndash;      <div v-for="stock in stocksData">&ndash;&gt;-->
-<!--&lt;!&ndash;        <h3>{{ stock.title}}</h3>&ndash;&gt;-->
-<!--&lt;!&ndash;        <article>{{ stock.body }}</article>&ndash;&gt;-->
-<!--&lt;!&ndash;      </div>&ndash;&gt;-->
-<!--      <line-chart :chart-data="lineChartData1" />-->
-<!--    </el-row>-->
-
-<!--    <el-row style="background:#fff;padding:16px 16px 0;margin-bottom:32px;">-->
-<!--      <h2>Cluster 2</h2>-->
-<!--      <line-chart :chart-data="lineChartData2" />-->
-<!--    </el-row>-->
-
-<!--    <el-row style="background:#fff;padding:16px 16px 0;margin-bottom:32px;">-->
-<!--      <h2>Cluster 3</h2>-->
-<!--      <line-chart :chart-data="lineChartData3" />-->
-<!--    </el-row>-->
-
-<!--    <el-row style="background:#fff;padding:16px 16px 0;margin-bottom:32px;">-->
-<!--      <h2>Cluster 4</h2>-->
-<!--      <line-chart :chart-data="lineChartData4" />-->
-<!--    </el-row>-->
 
   </div>
 </template>
@@ -186,6 +133,17 @@ const lineChartData = {
   }
 }
 
+const pieChartData = {
+  legend_data: ['Cluster1', 'Cluster2', 'Cluster3', 'Cluster4', 'Cluster5'],
+  series_data: [
+    { value: 500, name: 'Cluster1' },
+    { value: 400, name: 'Cluster2' },
+    { value: 300, name: 'Cluster3' },
+    { value: 200, name: 'Cluster4' },
+    { value: 100, name: 'Cluster5' }
+  ]
+}
+
 export default {
   name: 'Dashboard',
   computed: {
@@ -201,11 +159,23 @@ export default {
     PieChart,
     BarChart
   },
+  // props: {
+  //   kmeans_info: Object
+  // },
   data() {
     return {
       monitor: null,
       windowSize: 200,
+      k_num: 5,
       stocksData: [],
+      kmeans_info: pieChartData,
+      // kmeans_info: {
+      //   0.0: 577,
+      //   1.0: 400,
+      //   2.0: 300,
+      //   3.0: 200,
+      //   4.0: 100
+      // },
       // stocksData: [
       //   {
       //     name: 'Cluster1',
@@ -230,8 +200,6 @@ export default {
       lineChartData3: lineChartData.purchases,
       lineChartData4: lineChartData.shoppings,
 
-      clustersCount: 2,
-
       clustersDataAll: [
         { name: 'Cluster1', data: lineChartData.newVisitis },
         { name: 'Cluster2', data: lineChartData.messages },
@@ -242,6 +210,21 @@ export default {
     }
   },
   methods: {
+    // handleSetKMeansInfo(info) {
+    //   this.$emit('handleSetKMeansInfo', info)
+    // },
+    // handleSetKMeansInfo: function(info) {
+    //   this.$emit('handleSetKMeansInfo', info)
+    // },
+    updateK: function(clicked_k) {
+      this.k_num = clicked_k
+      // this.kmeans_info.legend_data = pieChartData.legend_data.slice(0, clicked_k)
+      // // var series = {}
+      // // for (var i in pieChartData.series_data) {
+      // //   this.kmeans_info.series_data
+      // // }
+      // this.kmeans_info.series_data = pieChartData.series_data.slice(0, clicked_k)
+    },
     handleSetLineChartData: function() {
     },
     post: function() {
@@ -264,6 +247,38 @@ export default {
 
         var cluster_idx = 1
         for (var key in data.body.data) {
+          // eslint-disable-next-line eqeqeq
+          if (key == 'kmean') {
+            var kmeans_info = data.body.data[key]
+            // this.handleSetKMeansInfo(this.kmeans_info)
+
+            // legend data
+            var k_idx = 0
+            var legend_data = []
+            var series_data = []
+            for (var i in kmeans_info) {
+              // legend data
+              var cluster_name = 'Cluster' + (k_idx + 1)
+              legend_data.push(cluster_name)
+
+              // series data
+              var record = {
+                value: kmeans_info[i],
+                name: cluster_name
+              }
+              series_data.push(record)
+
+              k_idx += 1
+            }
+
+            // update kmeans info
+            this.kmeans_info = {
+              legend_data: legend_data,
+              series_data: series_data
+            }
+          }
+
+          // eslint-disable-next-line eqeqeq
           if (key != 'kmean') {
             var name = 'Cluster' + cluster_idx
 
@@ -314,11 +329,8 @@ export default {
     refresh: function() {
       this.monitor = setInterval(this.get, 5000)
     },
-    confirmFunc: function() {
-      this.clustersData = this.clustersDataAll.slice(0, this.clustersCount)
-    },
     start: function() {
-      this.$http.get('http://127.0.0.1:5000/add_task?pname=streamclzreg').then(function(data) {
+      this.$http.get('http://127.0.0.1:5000/add_task?pname=streamclzreg&cluster_num=' + this.k_num).then(function(data) {
         console.log(data)
         // m = new Map(Object.entries(data))
       })
