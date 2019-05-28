@@ -1,0 +1,249 @@
+% $Id: template.tex 11 2007-04-03 22:25:53Z jpeltier $
+
+\documentclass{vgtc}                          % final (conference style)
+%\documentclass[review]{vgtc}                 % review
+%\documentclass[widereview]{vgtc}             % wide-spaced review
+%\documentclass[preprint]{vgtc}               % preprint
+%\documentclass[electronic]{vgtc}             % electronic version
+
+%% Uncomment one of the lines above depending on where your paper is
+%% in the conference process. ``review'' and ``widereview'' are for review
+%% submission, ``preprint'' is for pre-publication, and the final version
+%% doesn't use a specific qualifier. Further, ``electronic'' includes
+%% hyperreferences for more convenient online viewing.
+
+%% Please use one of the ``review'' options in combination with the
+%% assigned online id (see below) ONLY if your paper uses a double blind
+%% review process. Some conferences, like IEEE Vis and InfoVis, have NOT
+%% in the past.
+
+%% Figures should be in CMYK or Grey scale format, otherwise, colour 
+%% shifting may occur during the printing process.
+
+%% These few lines make a distinction between latex and pdflatex calls and they
+%% bring in essential packages for graphics and font handling.
+%% Note that due to the \DeclareGraphicsExtensions{} call it is no longer necessary
+%% to provide the the path and extension of a graphics file:
+%% \includegraphics{diamondrule} is completely sufficient.
+%%
+\ifpdf%                                % if we use pdflatex
+  \pdfoutput=1\relax                   % create PDFs from pdfLaTeX
+  \pdfcompresslevel=9                  % PDF Compression
+  \pdfoptionpdfminorversion=7          % create PDF 1.7
+  \ExecuteOptions{pdftex}
+  \usepackage{graphicx}                % allow us to embed graphics files
+  \DeclareGraphicsExtensions{.pdf,.png,.jpg,.jpeg} % for pdflatex we expect .pdf, .png, or .jpg files
+\else%                                 % else we use pure latex
+  \ExecuteOptions{dvips}
+  \usepackage{graphicx}                % allow us to embed graphics files
+  \DeclareGraphicsExtensions{.eps}     % for pure latex we expect eps files
+\fi%
+
+%% it is recomended to use ``\autoref{sec:bla}'' instead of ``Fig.~\ref{sec:bla}''
+\graphicspath{{figures/}{pictures/}{images/}{./}} % where to search for the images
+
+\usepackage{microtype}                 % use micro-typography (slightly more compact, better to read)
+\PassOptionsToPackage{warn}{textcomp}  % to address font issues with \textrightarrow
+\usepackage{textcomp}                  % use better special symbols
+\usepackage{mathptmx}                  % use matching math font
+\usepackage{times}                     % we use Times as the main font
+\renewcommand*\ttdefault{txtt}         % a nicer typewriter font
+\usepackage{cite}                      % needed to automatically sort the references
+\usepackage{tabu}                      % only used for the table example
+\usepackage{booktabs}                  % only used for the table example
+\usepackage{indentfirst}
+\usepackage{amssymb}
+%% We encourage the use of mathptmx for consistent usage of times font
+%% throughout the proceedings. However, if you encounter conflicts
+%% with other math-related packages, you may want to disable it.
+
+
+%% If you are submitting a paper to a conference for review with a double
+%% blind reviewing process, please replace the value ``0'' below with your
+%% OnlineID. Otherwise, you may safely leave it at ``0''.
+\onlineid{0}
+
+%% declare the category of your paper, only shown in review mode
+\vgtccategory{Research}
+
+%% allow for this line if you want the electronic option to work properly
+\vgtcinsertpkg
+
+%% In preprint mode you may define your own headline.
+%\preprinttext{To appear in an IEEE VGTC sponsored conference.}
+
+%% Paper title.
+
+\title{MSBD5003 Project Proposal\\
+Real-time Stock Clustering and Prediction} 
+
+%% This is how authors are specified in the conference style
+
+%% Author and Affiliation (single author).
+%%\author{Roy G. Biv\thanks{e-mail: roy.g.biv@aol.com}}
+%%\affiliation{\scriptsize Allied Widgets Research}
+
+%% Author and Affiliation (multiple authors with single affiliations).
+%%\author{Roy G. Biv\thanks{e-mail: roy.g.biv@aol.com} %
+%%\and Ed Grimley\thanks{e-mail:ed.grimley@aol.com} %
+%%\and Martha Stewart\thanks{e-mail:martha.stewart@marthastewart.com}}
+%%\affiliation{\scriptsize Martha Stewart Enterprises \\ Microsoft Research}
+
+%% Author and Affiliation (multiple authors with multiple affiliations)
+\author{ZHANG, Xichen\\ %
+        \scriptsize 20527341 %
+\and ZHENG, Dongjia\\ %
+     \scriptsize 20546139 %
+\and LI, Haoyang\\ %
+     \scriptsize 20533364 %
+\and WANG, Yuxian\\ %
+     \scriptsize 20549997
+     }
+
+%% A teaser figure can be included as follows, but is not recommended since
+%% the space is now taken up by a full width abstract.
+%\teaser{
+%  \includegraphics[width=1.5in]{sample.eps}
+%  \caption{Lookit! Lookit!}
+%}
+
+
+%% ACM Computing Classification System (CCS). 
+%% See <http://www.acm.org/about/class> for details.
+%% We recommend the 2012 system <http://www.acm.org/about/class/class/2012>
+%% For the 2012 system use the ``\CCScatTwelve'' which command takes four arguments.
+%% The 1998 system <http://www.acm.org/about/class/class/2012> is still possible
+%% For the 1998 system use the ``\CCScat'' which command takes four arguments.
+%% In both cases the last two arguments (1998) or last three (2012) can be empty.
+
+%\CCScatlist{
+  %\CCScat{H.5.2}{User Interfaces}{User Interfaces}{Graphical user interfaces (GUI)}{};
+  %\CCScat{H.5.m}{Information Interfaces and Presentation}{Miscellaneous}{}{}
+%}
+
+%% Copyright space is enabled by default as required by guidelines.
+%% It is disabled by the 'review' option or via the following command:
+% \nocopyrightspace
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%% START OF THE PAPER %%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\bibliographystyle{plain}
+
+%% The ``\maketitle'' command must be the first command after the
+%% ``\begin{document}'' command. It prepares and prints the title block.
+
+%% the only exception to this rule is the \firstsection command
+
+\firstsection{Background}
+\maketitle
+\noindent In recent years, increasing numbers of projects in stock market are conducted by big data technology. With the complex features, large volume of data as well as the real-time fluctuating price, and many other influential factors, in order to handle the task efficiently, big data technologies should be applied. Such platform can help organizations and individuals to having a better understanding of the stock market and making correct decisions in different situations.
+
+\section{Goal}
+\noindent We plan to do a wide project which aims to build a real-time stock clustering and prediction platform. In this platform, stock data (with indicators including code, name, changing ratio, trade, open, high, low, volume and so on) will be uploaded every second, so the system need to process the data in real time. In terms of clustering, the system will divide the stocks into groups based on their similarities. This will help users have a better understanding of the inner relationship between different stocks.
+
+
+\section{Datasource}
+\noindent Tushare is an open-sourced python financial data interface package. It is stable, free, fast data API which covers all the stocks data in China A-share market. Most importantly, it provides real-time stock data which satisfies the need (streaming data processing) of our project. Users can also obtain data in different granularities such as tick, minute, hour and day, etc.\\
+ 
+\noindent Most of the data obtained from Tushare, include stock code, stock name, open time, close time, highest price, lowest price, bid price, volume and amount are all in data-frame format. In our project, we are going to feed real-time stock data into spark streaming modules to do real-time processing and analysis. These data can be obtained from Tushare by the corresponding interface easily. Additionally, it can group the stocks data by different sectors, industries, concepts and regions, so that we may find some interesting insights from the clusters.
+
+\section{Functions}
+\noindent This project plans to have the following basic functions: data preprocessing, modelling and visualization.\\
+
+\noindent Firstly, stock data was collected using third-party APIs. At the same time, we need to do data cleansing, data storage, data integration and so on. Then, we cluster the stock into different groups in real-time. These grouping result may indicate that these stocks are influenced by similar factors including some industry information, cash flow and profits of some certain countries, etc. As a result, the clustered groups may change from time to time. Instead of predicting a specific stock price, we plan to predict the whole trend of stocks in a cluster. According to the financial information and patterns, we plan to do more feature engineering to predict stock price. Our models are incrementally trained, such that the newest prediction can always combine the latest news.\\
+
+\noindent In order to show our results, we also plan to do visualization at the end, and make the result more visually attractive and intuitive. This visualization part will show the result in real-time. \\
+
+\noindent We also plan to have some advanced functions to do more meticulous data processing. Such as more detailed OLAP and OLTP processing. In the visualization part, we can provide options for users to choose models they want, and to compare accuracy of different models. This may help the users to judge the stock classification, price prediction according to different models and have more insightful understanding of the stock market.
+
+\section{Techniques \& Architecture}
+
+\noindent In this project, we are going to use several techniques in different layers to achieve the functions. As the flow graph shows, there are mainly three layers in our design: Data API Layer, Data Process Platform and Visualization & Interaction Layer. The data API layer would be a wrapper of third party APIs to make our system compatible with multiple data sources. In this part, we will design a uniformed data structure as the input for the whole system. Some basic python packages such as pandas, numpy will be used here.\\
+
+\begin{figure}[h]%%图
+	\centering  %插入的图片居中表示
+	\includegraphics[width=1\linewidth]{frame.png} %插入的图，包括JPG,PNG,PDF,EPS等，放在源文件目录下
+	\caption{The total existing and proposed open space}  %图片的名称
+\end{figure}
+
+\noindent The second layer which is the most important part of the system is Data Process Platform. It consists of multiple services with different functions. It supports the fundamental functions of the system. From the users perspective, OLAP and OLTP meet two data analysis demands. We can handle these two different tasks by using Spark Streaming and Spark SQL, which can provide a satisfying performance on the clustering process. Since this is a distributed system, we may use Apache Kafka to do distribute the streaming messages. Furthermore, we use MongoDB as the database to support the OLAP business, as it is open-sourced and well designed for big data processing. In the bottom of this layer, the clustering, classification and regression algorithms will be driven by Spark MLlib which support distributed training. Moreover, we may use streaming linear regression and streaming k-means algorithm to support the OLTP business. The whole layer will encapsulated by Flask so as to provide REST APIs to the other modules.\\
+
+\noindent As for the visualization and interaction layer, it would be a simple B/S architecture App which support the top business level. It will use tools such as E-Chart as visualization component, since E-Chart provide a good animation effects as well as simplest graph data format. We may use Django or Flask as the back-end of the app which will manage the business service such as graph format and query request. The front-end may use Vue.js as it is lightweight with powerful template and suitable for quick development. AngularJS and React JS are also under consideration.
+
+
+\section{Evaluation}
+\noindent Our system will be evaluated from two perspective: system performance and model accuracy. System performance will consider from the real-time data processing efficiency and model building speed comparing to the traditional single server platform. And the accuracy will be evaluated by whether those stocks are in the same stock sector in the real life and whether this classifications groups are reasonably explained by some financial factors. At the same time, the prediction will be checked by the real time stock trend.
+
+\section{Workload \& collaboration}
+
+
+\begin{table}[h]
+\begin{tabular}{|l|c|c|c|c|}
+\hline
+                   & \multicolumn{1}{c|}{\begin{tabular}[c]{@{}c@{}}ZHANG\\ Xichen\end{tabular}} & \multicolumn{1}{c|}{\begin{tabular}[c]{@{}c@{}}LI\\ Haoyang\end{tabular}} & \multicolumn{1}{c|}{\begin{tabular}[c]{@{}c@{}}ZHENG \\ Dongjia\end{tabular}} & \multicolumn{1}{c|}{\begin{tabular}[c]{@{}c@{}}WANG\\ Yuxian\end{tabular}} \\ \hline
+Data Source        &                                                                             & \checkmark                                                                   &                                                                            &                                                                            \\ \hline
+Database           &                                                                             &                                                                              &\checkmark                                                                  &                                                                            \\ \hline
+Data Streaming     &                                                                             &                                                                              &\checkmark                                                                  &                                                                            \\ \hline
+Model              & \checkmark                                                                  &                                                                              &                                                                            &\checkmark                                                                            \\ \hline
+OLTP \& OLAP       & \checkmark                                                                  &                                                                              &                                                                            &                                                                            \\ \hline
+Back-end Services  &\checkmark                                                               &\checkmark                                                                    &                                                                            &                                                                            \\ \hline
+Front-end Services &                                                                             &                                                                              &\checkmark                                                                  &\checkmark                                                                  \\ \hline
+Document           &\checkmark                                                                   &\checkmark                                                                    &\checkmark                                                                  &\checkmark                                                                            \\ \hline
+\end{tabular}
+\end{table}
+
+
+{\normalsize \bibliographystyle{acm}
+\bibliography{../common/bibliography}}
+
+\begin{flushleft}
+\begin{thebibliography}{999}
+
+\bibitem{lamport1}
+  Microsoft Azure Big Data Achitecture,
+  \emph{https://docs.microsoft.com/en-us/azure/architecture/data-guide/big-data/}.
+  
+\bibitem{lamport2}
+  Spark Streaming Programming Guide,
+  \emph{https://spark.apache.org/docs/latest/streaming-programming-guide.html/}.
+  
+\bibitem{lamport3}
+  Machine Learning Library (MLlib) Guide
+  \emph{https://spark.apache.org/docs/latest/ml-guide.html}.  
+
+\bibitem{lamport4}
+\emph{TuShare 0.4.3 documentation}:  
+http://tushare.org/trading.html
+  
+\bibitem{lamport5}
+\emph{Flask User's Guide}:
+http://flask.pocoo.org/docs/1.0/
+
+\bibitem{lamport6}
+\emph{E-Charts Documentation}:
+https://ecomfe.github.io/echarts-doc/public/en/option.html
+
+\bibitem{lamport7}
+\emph{Django Documentation}:
+https://docs.djangoproject.com/en/2.1/
+
+\bibitem{lamport8}
+\emph{MongoDB Connector for Apache Spark}:
+https://www.mongodb.com/products/spark-connector
+
+\end{thebibliography}
+\end{flushleft}
+
+
+%\bibliographystyle{abbrv}
+\bibliographystyle{abbrv-doi}
+%\bibliographystyle{abbrv-doi-narrow}
+%\bibliographystyle{abbrv-doi-hyperref}
+%\bibliographystyle{abbrv-doi-hyperref-narrow}
+
+\bibliography{bibfile}
+\bibliography{template}
+\end{document}
