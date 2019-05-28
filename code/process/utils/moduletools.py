@@ -3,7 +3,7 @@
 
 # @Time    : 2019-04-13 13:48
 # @Author  : chen
-# @Site    : 
+# @Site    :
 # @File    : moduletools.py
 # @Software: PyCharm
 
@@ -27,8 +27,8 @@ def castparam(cast_dict:dict=dict()):
     """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            print(f"args: {args}")
-            print(f"kwargs: {kwargs}")
+            # print(f"args: {args}")
+            # print(f"kwargs: {kwargs}")
             for k in cast_dict:
                 if k in kwargs and kwargs[k] is not None:
                     kwargs.update({k :cast_dict[k](kwargs[k])})
